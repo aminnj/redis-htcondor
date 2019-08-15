@@ -12,4 +12,4 @@ executable              = executable.sh
 +taskname = "mytask1"
 +SingularityImage="/cvmfs/singularity.opensciencegrid.org/efajardo/docker-cms:tensorflow"
 JobBatchName = "worker"
-Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true))
+Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && (TARGET.Machine != "sdsc-49.t2.ucsd.edu") && (TARGET.Machine != "cabinet-7-7-36.t2.ucsd.edu") && (TARGET.Machine != "cabinet-8-8-1.t2.ucsd.edu"))

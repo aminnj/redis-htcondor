@@ -38,6 +38,12 @@ nc -z -v -w5 0.tcp.ngrok.io 16890
 
 ## Prepare environment for workers
 
+Clone this repository and `cd` in.
+```
+git clone <whatever I end up calling this repo>
+cd $_
+```
+
 Make a virtualenv inside the same singularity container specified in the submit file and then tarball it.
 This will provide the workers with the same versions of `cloudpickle`, `python`, etc.
 ```
@@ -49,7 +55,10 @@ pip3 install redis cloudpickle lz4 uproot
 tar cJf workerenv.tar.xz workerenv/
 ```
 
+
 ## Submit some workers
+
+Exit the previous singularity container with <kbd>ctrl-d</kbd>.
 
 Submit 1 or 2 workers first. If they're running for longer than 30 seconds without crashing, then
 do the next step and see if the workers become visible in the notebook before going crazy launching more.
