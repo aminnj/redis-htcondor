@@ -47,6 +47,9 @@ tar xf workerenv.tar.xz
 ls -lrth
 export PATH=`pwd`/workerenv/bin:$PATH
 
+# Need for ray/click
+export LC_ALL=C.UTF-8
+
 echo $PATH
 echo $PYTHONPATH
 

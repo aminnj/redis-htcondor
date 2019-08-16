@@ -8,6 +8,7 @@ Download and compile redis, then start it up
 with appropriate handling of port forwarding.
 ```
 curl -O -L http://download.redis.io/releases/redis-5.0.5.tar.gz
+tar xf redis-5.0.5.tar.gz
 cd redis-5.0.5
 make
 
@@ -51,7 +52,7 @@ singularity shell --bind /hadoop /cvmfs/singularity.opensciencegrid.org/efajardo
 [ -d virtualenv ] ||  pip3 install virtualenv --target=`pwd`/virtualenv virtualenv
 [ -d workerenv ] || python3 virtualenv/virtualenv.py workerenv
 . workerenv/bin/activate
-pip3 install redis cloudpickle lz4 uproot
+pip3 install redis cloudpickle lz4 uproot psutil
 tar cJf workerenv.tar.xz workerenv/
 ```
 
@@ -79,7 +80,7 @@ Make a separate virtualenv inside the same singularity container
 ./start_analysis_server.sh
 
 # visit the url printed out at the end and make sure to forward the port to your laptop first. e.g.,
-ssh -N -f -L localhost:8880:localhost:8880 uaf-10.t2.ucsd.edu
+ssh -N -f -L localhost:8895:localhost:8895 uaf-10.t2.ucsd.edu
 ```
 
-Open `playredis.ipynb` and play around.
+Open `example.ipynb` and play around.

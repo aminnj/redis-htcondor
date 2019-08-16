@@ -6,6 +6,7 @@ import subprocess
 import os
 import argparse
 import time
+import psutil
 
 def get_classad(classad):
     stat,out = subprocess.getstatusoutput(r"""grep -i "^{}\b" "$_CONDOR_JOB_AD" | cut -d= -f2- | xargs echo""".format(classad))
@@ -20,7 +21,7 @@ def decompress_and_loads(obj):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("url", help="redis url. e.g., redis://[:password]@localhost:6379/0")
+    parser.add_argument("url", help="redis url. e.g., redis://[:password]@localhost:6379")
     args = parser.parse_args()
 
     hostname = os.uname()[1]
@@ -46,19 +47,36 @@ if __name__ == "__main__":
 
     print("client_name:",client_name)
 
+    p = psutil.Process()
+
     while True:
         key,task_raw = r.brpop(user+":tasks")
 
         f,args = decompress_and_loads(task_raw)
 
+        ioc = p.io_counters()
+        read_bytes0 = ioc.read_bytes
+        write_bytes0 = ioc.write_bytes
         t0 = time.time()
+
         res = f(args)
+
         t1 = time.time()
-        # print(key,f,args,res)
+        ioc = p.io_counters()
+        read_bytes1 = ioc.read_bytes
+        write_bytes1 = ioc.write_bytes
+
         print(key,f,args)
 
-        meta = dict(client_name=client_name,args=args,elapsed=t1-t0)
+        meta = dict(
+            client_name=client_name,
+            args=args,
+            tstart=t0,
+            tstop=t1,
+            read_bytes=(read_bytes1-read_bytes0),
+            write_bytes=(write_bytes1-write_bytes0),
+            )
 
-        r.lpush(user+":results",compress_and_dumps([meta,res]))
+        r.lpush(user+":results",compress_and_dumps([res,meta]))
 
 
