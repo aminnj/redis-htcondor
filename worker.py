@@ -7,6 +7,9 @@ import os
 import argparse
 import time
 import psutil
+import traceback
+import random
+import diskcache
 
 def get_classad(classad):
     stat,out = subprocess.getstatusoutput(r"""grep -i "^{}\b" "$_CONDOR_JOB_AD" | cut -d= -f2- | xargs echo""".format(classad))
@@ -26,31 +29,33 @@ if __name__ == "__main__":
 
     hostname = os.uname()[1]
     try:
-        taskname = str(get_classad("taskname"))
+        # taskname = str(get_classad("taskname"))
         clusterid = int(get_classad("ClusterId").split(".")[0])
         procid = int(get_classad("ProcId"))
         user = str(get_classad("User").split("@")[0]).strip()
     except:
-        taskname = "local"
+        # taskname = "local"
         clusterid = 0
         procid = 0
         user = "unknown"
 
-    # sys.exit()
-
     print("url:",args.url)
-    # r = redis.Redis(host=args.url)
     r = redis.Redis.from_url(args.url)
-    client_name = "{}__{}__{}__{}.{}".format(user,hostname,taskname,clusterid,procid)
-    print(client_name)
-    r.client_setname(client_name)
+    # worker_name = "{}__{}__{}__{}.{}".format(user,hostname,taskname,clusterid,procid)
+    worker_name = "{}__{}__{}.{}".format(user,hostname,clusterid,procid)
 
-    print("client_name:",client_name)
+    r.client_setname(worker_name)
+
+    print("worker_name:",worker_name)
 
     p = psutil.Process()
 
     while True:
-        key,task_raw = r.brpop(user+":tasks")
+        # listen to the general queue and also a queue especially for this worker
+        key,task_raw = r.brpop([
+            user+":tasks",
+            worker_name+":tasks",
+            ])
 
         f,args = decompress_and_loads(task_raw)
 
@@ -59,7 +64,10 @@ if __name__ == "__main__":
         write_bytes0 = ioc.write_bytes
         t0 = time.time()
 
-        res = f(args)
+        try:
+            res = f(args)
+        except:
+            res = traceback.format_exc()
 
         t1 = time.time()
         ioc = p.io_counters()
@@ -69,7 +77,7 @@ if __name__ == "__main__":
         print(key,f,args)
 
         meta = dict(
-            client_name=client_name,
+            worker_name=worker_name,
             args=args,
             tstart=t0,
             tstop=t1,
@@ -77,6 +85,7 @@ if __name__ == "__main__":
             write_bytes=(write_bytes1-write_bytes0),
             )
 
+        # regardless of the incoming queue, push into general results queue
         r.lpush(user+":results",compress_and_dumps([res,meta]))
 
 

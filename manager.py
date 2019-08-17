@@ -8,7 +8,7 @@ import lz4.frame
 import pandas as pd
 from tqdm.auto import tqdm
 
-# functions to pickle and unpickle (to/from string) with lz4 compression
+# pickle and unpickle (to/from string) with lz4 compression
 # note, cloudpickle requires same python version used locally and on worker!!
 # this could be relaxed with a different pickle protocol in dumps(), but then life gets messier
 def compress_and_dumps(obj):
@@ -24,18 +24,16 @@ class Manager(object):
         self.user = os.getenv("USER")
         self.qname_results = qname_results if qname_results else self.user+":results"
         self.qname_tasks = qname_tasks if qname_tasks else self.user+":tasks"
-        
+        self.remote_results = []
+
     def get_worker_info(self):
         df = pd.DataFrame(self.r.client_list()).query("flags!='N'")[["addr","name","age","id","idle"]]
-        df = df[df["name"].str.startswith(self.user)]
+        df = df[df["name"].str.startswith(self.user+"__")]
         return df
-    
+
     def local_map(self, func, vargs,progress_bar=True):
         results = []
-        if progress_bar:
-            bar = tqdm(vargs)
-        else:
-            bar = vargs
+        bar = tqdm(vargs, disable=not progress_bar)
         for args in bar:
             results.append(func(args))
         return results
@@ -43,20 +41,53 @@ class Manager(object):
     def clear_queues(self):
         self.r.delete(self.qname_results,self.qname_tasks)
 
-    def remote_map(self, func, vargs, return_metadata=True):
+    def remote_map(self, func, vargs, return_metadata=True,
+                   progress_bar=True,reuse_chunking=True,worker_names=[],
+                   shuffle_chunks=False,
+                  ):
         self.clear_queues()
-        
+
+        # If the previous chunking matches the current chunking, then
+        # use the old chunks and corresponding worker names to make use of
+        # cached branches
+        if self.remote_results and len(self.remote_results[0]) == 2:
+            old_vargs = [r[1]["args"] for r in self.remote_results]
+            old_worker_names = [r[1]["worker_name"] for r in self.remote_results]
+            if sorted(map(tuple,chunks)) == sorted(map(tuple,old_vargs)):
+                vargs = old_vargs
+                worker_names = old_worker_names
+                print("Current chunking matches old chunking, so we will re-use the old worker ordering "
+                      "to make use of caching")
+
+        # Ability to shuffle chunks in case consecutive jobs land on the same disk and compete
+        if shuffle_chunks:
+            if len(worker_names) >= len(vargs):
+                combined = list(zip(vargs,worker_names))
+                random.shuffle(combined)
+                vargs, worker_names = zip(*combined)
+            else:
+                random.shuffle(vargs)
+
         vals = [compress_and_dumps([func,args]) for args in vargs]
-        self.r.lpush(self.qname_tasks,*vals)
+
+        # If user specified enough worker names to cover all tasks we will submit,
+        # then submit them to those workers specifically, otherwise
+        # submit to the general task queue
+        if len(worker_names) >= len(vals):
+            pipe = self.r.pipeline()
+            for worker_name,val in zip(worker_names,vals):
+                self.r.lpush("{}:tasks".format(worker_name),val)
+            pipe.execute()
+        else:
+            self.r.lpush(self.qname_tasks,*vals)
 
         # Read results from broker
         results = []
-#         bar = tqdm(total=total_nevents,unit_scale=True,unit="event")
-        bar = tqdm(total=len(vargs))
+        bar = tqdm(total=len(vargs), disable=not progress_bar)
         while len(results) < len(vargs):
             tofetch = self.r.llen(self.qname_results)
             # avoid spamming pops requests too fast
-            if tofetch == 0: 
+            if tofetch == 0:
                 time.sleep(0.5)
                 continue
             pipe = self.r.pipeline()
@@ -73,5 +104,6 @@ class Manager(object):
                     results.append(res[0])
                 bar.update(1)
         bar.close()
+        self.remote_results = results
         return results
 

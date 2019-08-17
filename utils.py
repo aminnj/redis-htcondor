@@ -7,27 +7,27 @@ def plot_timeflow(results,ax=None):
     Takes `results` returned by `remote_map`, 
     which is a list of pairs, the second elements of which are
     dicts that contain a `tstart` and `tstop` key
-    as well as a `client_name` identifier.
+    as well as a `worker_name` identifier.
     """
     data = []
-    for client,df in pd.DataFrame([result[1] for result in results]).sort_values("client_name").groupby("client_name"):
+    for worker,df in pd.DataFrame([result[1] for result in results]).sort_values("worker_name").groupby("worker_name"):
         starts = df.tstart.values
         stops = df.tstop.values
         pairs = sorted(list(zip(starts,stops)))
         for p in pairs:
-            data.append([client,p[0],p[1]])
-    df = pd.DataFrame(data,columns=["client_name","tstart","tstop"])
-    df["client_name"] = df["client_name"].astype("category")
+            data.append([worker,p[0],p[1]])
+    df = pd.DataFrame(data,columns=["worker_name","tstart","tstop"])
+    df["worker_name"] = df["worker_name"].astype("category")
     first = df["tstart"].min()
     df["tstart"] -= first
     df["tstop"] -= first
     height = 3
-    if df["client_name"].nunique() > 30: height = 5
-    if df["client_name"].nunique() >= 100: height = 9
-    if df["client_name"].nunique() >= 200: height = 15
+    if df["worker_name"].nunique() > 30: height = 5
+    if df["worker_name"].nunique() >= 100: height = 9
+    if df["worker_name"].nunique() >= 200: height = 15
     if ax is None:
         fig,ax = plt.subplots(figsize=(15,height))
-    ax.barh(df["client_name"].cat.codes, df["tstop"]-df["tstart"], left=df["tstart"],height=1.0,edgecolor="k",fc="C0")
+    ax.barh(df["worker_name"].cat.codes, df["tstop"]-df["tstart"], left=df["tstart"],height=1.0,edgecolor="k",fc="C0")
     ax.set_xlabel("elapsed time since start [s]",fontsize="x-large")
     ax.set_ylabel("worker number",fontsize="x-large")
     return fig,ax

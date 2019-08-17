@@ -52,7 +52,7 @@ singularity shell --bind /hadoop /cvmfs/singularity.opensciencegrid.org/efajardo
 [ -d virtualenv ] ||  pip3 install virtualenv --target=`pwd`/virtualenv virtualenv
 [ -d workerenv ] || python3 virtualenv/virtualenv.py workerenv
 . workerenv/bin/activate
-pip3 install redis cloudpickle lz4 uproot psutil
+pip3 install redis cloudpickle lz4 uproot psutil diskcache
 tar cJf workerenv.tar.xz workerenv/
 ```
 
