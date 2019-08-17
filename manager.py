@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import random
+from collections import defaultdict
 
 import cloudpickle
 import redis
