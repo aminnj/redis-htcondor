@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import functools
+import concurrent.futures
+import uproot
 
 def plot_timeflow(results,ax=None):
     """
@@ -55,3 +58,21 @@ def plot_cumulative_read(results,ax=None):
     ax.set_title("Read {:.2f}GB in {:.2f}s @ {:.3f}GB/s".format(ys.max(),xs.max(),ys.max()/xs.max()))
     ax.legend()
     return fig,ax
+
+@functools.lru_cache(maxsize=128)
+def get_chunking(filelist, chunksize, treename="Events", workers=12):
+    """
+    Return 2-tuple of
+    - chunks: triplets of (filename,entrystart,entrystop) calculated with input `chunksize` and `filelist`
+    - total_nevents: total event count over `filelist`
+    """
+    print("Recomputing")
+    chunks = []
+    executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(workers)
+    nevents = 0
+    for fn, nentries in uproot.numentries(filelist, treename, total=False, executor=executor,).items():
+        nevents += nentries
+        for index in range(nentries // chunksize + 1):
+            chunks.append((fn, chunksize*index, chunksize*(index+1)))
+    return chunks,nevents
+

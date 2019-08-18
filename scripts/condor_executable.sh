@@ -18,36 +18,22 @@ else
     exit 1
 fi
 
-ls -lrth
-
-if ! ls /hadoop/cms/store/user/namin ; then
-    echo "hadoop is not visible (?), so the worker would be useless later. dying."
+if ! ls /hadoop/cms/store/ ; then
+    echo "ERROR! hadoop is not visible, so the worker would be useless later. dying."
     exit 1
-else
-    echo "found user dir in hadoop"
 fi
 
-# # cmsenv not needed with this singularity container
-# export SCRAM_ARCH="slc7_amd64_gcc700"
-# CMSSWVERSION="CMSSW_10_5_0"
-# cmsrel $CMSSWVERSION
-# cd $CMSSWVERSION
-# cmsenv
-# if [[ $? != 0 ]]; then
-#     echo "cmsenv error, so maybe cvmfs is messed up"
-#     exit 1
-# fi
+ls -lrth
+hostname
 
 mkdir temp
 cd temp
 mv ../workerenv.tar.xz .
 mv ../worker.py .
-
 tar xf workerenv.tar.xz
+
 ls -lrth
 export PATH=`pwd`/workerenv/bin:$PATH
-
-# Need for ray/click
 export LC_ALL=C.UTF-8
 
 echo $PATH

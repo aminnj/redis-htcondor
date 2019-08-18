@@ -52,7 +52,7 @@ class Manager(object):
         # If the previous chunking matches the current chunking, then
         # use the old chunks and corresponding worker names to make use of
         # cached branches
-        if self.remote_results and len(self.remote_results[0]) == 2:
+        if reuse_chunking and self.remote_results and len(self.remote_results[0]) == 2:
             old_vargs = [r[1]["args"] for r in self.remote_results]
             old_worker_names = [r[1]["worker_name"] for r in self.remote_results]
             if sorted(map(tuple,chunks)) == sorted(map(tuple,old_vargs)):
