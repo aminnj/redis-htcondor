@@ -5,17 +5,19 @@ in a similar style to [coffea](https://github.com/CoffeaTeam/coffea), but using 
 that sends computing tasks to workers running in an HTCondor batch system.
 
 There are a handful of tools designed to do this more generally (dynamic task execution with brokered communication):
+* [htmap](https://github.com/htcondor/htmap)
 * [parsl](https://github.com/Parsl/parsl)
 * [dask](https://distributed.dask.org/en/latest/)
 * [celery](https://github.com/celery/celery)
 * [ray](https://github.com/ray-project/ray)
 * [airflow](https://github.com/apache/airflow)
+* [dramatiq](https://github.com/Bogdanp/dramatiq)
 
 Unfortunately, limitations on what ports are open/how processes communicate
 within and outside the batch system means it would be difficult to use these
 out of the box. So here I have a simple task queue system that allows me to
 have more low-level customization to suit ROOT file analysis (data locality,
-caching, compressing communication).  The jobs are "embarrassingly parallel",
+caching, compressed communication).  The jobs are "embarrassingly parallel",
 so there's no real need for complex dynamic logic, direct inter-worker
 communication, DAGs, etc, and this relies on exactly one redis master server
 (one single public-facing ip/port).

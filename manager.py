@@ -28,10 +28,58 @@ class Manager(object):
         self.qname_tasks = qname_tasks if qname_tasks else self.user+":tasks"
         self.remote_results = []
 
-    def get_worker_info(self):
+    def get_worker_info(self, include_stats=False, stat_integration_time=2.0):
         df = pd.DataFrame(self.r.client_list()).query("flags!='N'")[["addr","name","age","id","idle"]]
         df = df[df["name"].str.startswith(self.user+"__")]
+        if not include_stats:
+            return df.set_index("name")
+        def f(meta):
+            p = psutil.Process().parent() # need parent of this thread
+            t1 = time.time()
+            net1 = psutil.net_io_counters()
+            disk1 = psutil.disk_io_counters()
+            time.sleep(stat_integration_time)
+            t2 = time.time()
+            net2 = psutil.net_io_counters()
+            disk2 = psutil.disk_io_counters()
+            return dict(
+                meta=meta,
+                t1=t1,t2=t2,
+                net1=net1,net2=net2,
+                disk1=disk1,disk2=disk2,
+                mem_used=p.memory_info()[0],
+               )
+        self.r.publish(self.user+":channel1",compress_and_dumps(f))
+        # wait 1 more second than the process should've slept and fetch results in one shot
+        time.sleep(stat_integration_time+1.)
+        pipe = m.r.pipeline()
+        pipe.lrange(self.user+":channel1results",0,-1)
+        pipe.delete(self.user+":channel1results")
+        results = pipe.execute()[0]
+        def f(x):
+            d = decompress_and_loads(x)
+            ret = {}
+            ret["name"] = d["meta"]["worker_name"]
+            ret["worker_time_elapsed"] = d["meta"]["total_time_elapsed"]
+            ret["worker_write_bytes"] = d["meta"]["total_write_bytes"]
+            ret["worker_read_bytes"] = d["meta"]["total_read_bytes"]
+            ret["worker_tasks"] = d["meta"]["total_tasks"]
+            ret["worker_mem_used"] = d["mem_used"]
+            ret["node_dt"] = d["t2"]-d["t1"]
+            ret["node_read_bytes"] = d["disk2"].read_bytes-d["disk1"].read_bytes
+            ret["node_write_bytes"] = d["disk2"].write_bytes-d["disk1"].write_bytes
+            ret["node_recv_bytes"] = d["net2"].bytes_recv-d["net1"].bytes_recv
+            ret["node_sent_bytes"] = d["net2"].bytes_sent-d["net1"].bytes_sent
+            return ret
+        df["node"] = df["name"].str.split("__").str[1]
+        df = df.merge(pd.DataFrame(map(f,results)),on="name",how="outer").set_index("name")
+        failed = df["node_dt"].isna().sum()
+        if failed > 0:
+            print("Did not hear back from {} workers in time".format(failed))
         return df
+
+    def get_broker_info(self):
+        return self.r.info("all") #["cmdstat_brpop"]
 
     def local_map(self, func, vargs,progress_bar=True):
         results = []
@@ -44,7 +92,7 @@ class Manager(object):
         self.r.delete(self.qname_results,self.qname_tasks)
 
     def remote_map(self, func, vargs, return_metadata=True,
-                   progress_bar=True,reuse_chunking=True,worker_names=[],
+                   progress_bar=True,reuse_chunking=False,worker_names=[],
                    shuffle_chunks=False,
                   ):
         self.clear_queues()
@@ -52,10 +100,10 @@ class Manager(object):
         # If the previous chunking matches the current chunking, then
         # use the old chunks and corresponding worker names to make use of
         # cached branches
-        if reuse_chunking and self.remote_results and len(self.remote_results[0]) == 2:
+        if reuse_chunking and self.remote_results and (type(self.remote_results[0]) in [tuple,list]) and len(self.remote_results[0]) == 2:
             old_vargs = [r[1]["args"] for r in self.remote_results]
             old_worker_names = [r[1]["worker_name"] for r in self.remote_results]
-            if sorted(map(tuple,chunks)) == sorted(map(tuple,old_vargs)):
+            if (type(vargs) in [tuple,list]) and (sorted(map(tuple,vargs)) == sorted(map(tuple,old_vargs))):
                 vargs = old_vargs
                 worker_names = old_worker_names
                 print("Current chunking matches old chunking, so we will re-use the old worker ordering "
@@ -72,6 +120,7 @@ class Manager(object):
 
         vals = [compress_and_dumps([func,args]) for args in vargs]
 
+
         # If user specified enough worker names to cover all tasks we will submit,
         # then submit them to those workers specifically, otherwise
         # submit to the general task queue
@@ -83,10 +132,24 @@ class Manager(object):
         else:
             self.r.lpush(self.qname_tasks,*vals)
 
+
         # Read results from broker
         results = []
-        bar = tqdm(total=len(vargs), disable=not progress_bar)
+        bar = tqdm(total=len(vargs), disable=not progress_bar) #, unit_scale=True,unit="event")
+#         last_fetch = 0
         while len(results) < len(vargs):
+
+#             pipe = self.r.pipeline()
+#             pipe.lrange(self.qname_results,0,-1)
+#             pipe.delete(self.qname_results)
+#             popchunk = pipe.execute()[0]
+#             # avoid spamming requests too fast
+#             now = time.time()
+#             if now-last_fetch < 0.5:
+#                 time.sleep(0.5)
+#             last_fetch = now
+
+            time.sleep(0.1)
             tofetch = self.r.llen(self.qname_results)
             # avoid spamming pops requests too fast
             if tofetch == 0:

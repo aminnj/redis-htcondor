@@ -7,13 +7,14 @@ import uproot
 
 def plot_timeflow(results,ax=None):
     """
-    Takes `results` returned by `remote_map`, 
+    Takes `results` returned by `remote_map`,
     which is a list of pairs, the second elements of which are
     dicts that contain a `tstart` and `tstop` key
     as well as a `worker_name` identifier.
     """
     data = []
-    for worker,df in pd.DataFrame([result[1] for result in results]).sort_values("worker_name").groupby("worker_name"):
+    dfr = pd.DataFrame([result[1] for result in results]).sort_values("worker_name").groupby("worker_name")
+    for worker,df in dfr:
         starts = df.tstart.values
         stops = df.tstop.values
         pairs = sorted(list(zip(starts,stops)))
@@ -33,6 +34,9 @@ def plot_timeflow(results,ax=None):
     ax.barh(df["worker_name"].cat.codes, df["tstop"]-df["tstart"], left=df["tstart"],height=1.0,edgecolor="k",fc="C0")
     ax.set_xlabel("elapsed time since start [s]",fontsize="x-large")
     ax.set_ylabel("worker number",fontsize="x-large")
+    wtime = (df["tstop"]-df["tstart"]).sum()
+    ttime  = df["tstop"].max()*df["worker_name"].nunique()
+    ax.set_title("efficiency (filled/total) = {:.1f}%".format(100.0*wtime/ttime))
     return fig,ax
 
 def plot_cumulative_read(results,ax=None):
@@ -46,16 +50,69 @@ def plot_cumulative_read(results,ax=None):
     if ax is None:
         fig,ax = plt.subplots()
     xs, ys = df["tstop"],df["read_bytes"].cumsum()/1e9
-    # fit a line, then fit again to only those with resids < 1sigma
-    m,b = np.polyfit(xs,ys,1)
-    resids = (m*xs+b)-ys
-    central = (np.abs(resids-resids.mean())/resids.std() < 1.0)
-    m,b = np.polyfit(xs[central],ys[central],1)
     ax.plot(xs,ys)
-    ax.plot(xs,m*xs+b,label="fit ({:.2f}GB/s)".format(m))
+
+    # https://stackoverflow.com/questions/13691775/python-pinpointing-the-linear-part-of-a-slope
+    # create convolution kernel for calculating
+    # the smoothed second order derivative
+    smooth_width = int(len(xs)*0.5)
+    x1 = np.linspace(-3,3,smooth_width)
+    norm = np.sum(np.exp(-x1**2)) * (x1[1]-x1[0])
+    y1 = (4*x1**2 - 2) * np.exp(-x1**2) / smooth_width*8
+    y_conv = np.convolve(ys, y1, mode="same")
+    central = (np.abs(y_conv)<y_conv.std()/2.0)
+    m,b = np.polyfit(xs[central],ys[central],1)
+    # fit again with points closest to the first fit
+    resids = (m*xs+b)-ys
+    better = (np.abs(resids-resids.mean())/resids.std() < 1.0)
+    m,b = np.polyfit(xs[better & central],ys[better & central],1)
+    ax.plot(xs[better & central],m*xs[better & central]+b,label="fit ({:.2f}GB/s)".format(m))
+
     ax.set_xlabel("time since start [s]")
     ax.set_ylabel("cumulative read GB")
     ax.set_title("Read {:.2f}GB in {:.2f}s @ {:.3f}GB/s".format(ys.max(),xs.max(),ys.max()/xs.max()))
+
+    ax.legend()
+    return fig,ax
+
+def plot_cumulative_events(results,ax=None):
+    """
+    Same inputs as `plot_timeflow`
+    """
+    df = pd.DataFrame([result[1] for result in results])
+    try:
+        df["estart"] = df["args"].str[1]
+        df["estop"] = df["args"].str[2]
+    except:
+        return
+    df["elapsed"] = df["tstop"]-df["tstart"]
+    df[["tstart","tstop"]] -= df["tstart"].min()
+    df = df.sort_values("tstop")
+    if ax is None:
+        fig,ax = plt.subplots()
+    xs, ys = df["tstop"],(df["estop"]-df["estart"]).cumsum()/1e6
+    ax.plot(xs,ys)
+
+    # https://stackoverflow.com/questions/13691775/python-pinpointing-the-linear-part-of-a-slope
+    # create convolution kernel for calculating
+    # the smoothed second order derivative
+    smooth_width = int(len(xs)*0.5)
+    x1 = np.linspace(-3,3,smooth_width)
+    norm = np.sum(np.exp(-x1**2)) * (x1[1]-x1[0])
+    y1 = (4*x1**2 - 2) * np.exp(-x1**2) / smooth_width*8
+    y_conv = np.convolve(ys, y1, mode="same")
+    central = (np.abs(y_conv)<y_conv.std()/2.0)
+    m,b = np.polyfit(xs[central],ys[central],1)
+    # fit again with points closest to the first fit
+    resids = (m*xs+b)-ys
+    better = (np.abs(resids-resids.mean())/resids.std() < 1.0)
+    m,b = np.polyfit(xs[better & central],ys[better & central],1)
+    ax.plot(xs[better & central],m*xs[better & central]+b,label="fit ({:.2f}Mevents/s)".format(m))
+
+    ax.set_xlabel("time since start [s]")
+    ax.set_ylabel("cumulative Mevents")
+    ax.set_title("Processed {:.2f}Mevents in {:.2f}s @ {:.3f}MHz".format(ys.max(),xs.max(),ys.max()/xs.max()))
+
     ax.legend()
     return fig,ax
 
@@ -66,13 +123,12 @@ def get_chunking(filelist, chunksize, treename="Events", workers=12):
     - chunks: triplets of (filename,entrystart,entrystop) calculated with input `chunksize` and `filelist`
     - total_nevents: total event count over `filelist`
     """
-    print("Recomputing")
     chunks = []
-    executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(workers)
+    executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(min(workers,len(filelist)))
     nevents = 0
     for fn, nentries in uproot.numentries(filelist, treename, total=False, executor=executor,).items():
         nevents += nentries
         for index in range(nentries // chunksize + 1):
-            chunks.append((fn, chunksize*index, chunksize*(index+1)))
+            chunks.append((fn, chunksize*index, min(chunksize*(index+1),nentries)))
     return chunks,nevents
 

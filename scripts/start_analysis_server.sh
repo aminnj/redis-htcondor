@@ -7,6 +7,7 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)/virtualenv
 source myenv/bin/activate
 pip3 install matplotlib uproot coffea jupyter tqdm pandas lz4 cloudpickle redis
 export LC_ALL=C.UTF-8
+export PYTHONPATH=$(pwd):$PYTHONPATH
 jupyter notebook --no-browser --port=8895
 
 EOF

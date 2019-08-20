@@ -1,7 +1,3 @@
-## Todo
-* Consider using [AWS](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/nodes-connecting.html) for redis broker
-* Report metadata about hostname/clusterID/procID when returning a result so we know which ones are slow
-
 ## Install and deploy redis
 
 Download and compile redis, then start it up
