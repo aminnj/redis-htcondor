@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import functools
 import concurrent.futures
 import uproot
+from tqdm.auto import tqdm
 
 def plot_timeflow(results,ax=None):
     """
@@ -36,6 +37,7 @@ def plot_timeflow(results,ax=None):
     ax.set_ylabel("worker number",fontsize="x-large")
     wtime = (df["tstop"]-df["tstart"]).sum()
     ttime  = df["tstop"].max()*df["worker_name"].nunique()
+    ax.set_xlim([0.,df["tstop"].max()])
     ax.set_title("efficiency (filled/total) = {:.1f}%".format(100.0*wtime/ttime))
     return fig,ax
 
@@ -117,18 +119,30 @@ def plot_cumulative_events(results,ax=None):
     return fig,ax
 
 @functools.lru_cache(maxsize=128)
-def get_chunking(filelist, chunksize, treename="Events", workers=12):
+def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_files=False):
     """
     Return 2-tuple of
     - chunks: triplets of (filename,entrystart,entrystop) calculated with input `chunksize` and `filelist`
     - total_nevents: total event count over `filelist`
     """
     chunks = []
-    executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(min(workers,len(filelist)))
     nevents = 0
-    for fn, nentries in uproot.numentries(filelist, treename, total=False, executor=executor,).items():
-        nevents += nentries
-        for index in range(nentries // chunksize + 1):
-            chunks.append((fn, chunksize*index, min(chunksize*(index+1),nentries)))
+    if skip_bad_files:
+        # slightly slower (serial loop), but can skip bad files
+        for fname in tqdm(filelist):
+            try:
+                items = uproot.numentries(fname, treename, total=False).items()
+            except (IndexError,ValueError) as e:
+                print("Skipping bad file",fname)
+                continue
+            for fn, nentries in items:
+                nevents += nentries
+                for index in range(nentries // chunksize + 1):
+                    chunks.append((fn, chunksize*index, min(chunksize*(index+1),nentries)))
+    else:
+        executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(min(workers,len(filelist)))
+        for fn, nentries in uproot.numentries(filelist, treename, total=False, executor=executor).items():
+            nevents += nentries
+            for index in range(nentries // chunksize + 1):
+                chunks.append((fn, chunksize*index, min(chunksize*(index+1),nentries)))
     return chunks,nevents
-
