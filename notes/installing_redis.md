@@ -1,5 +1,7 @@
 ## Install and deploy redis
 
+### Manually
+
 Download and compile redis, then start it up
 with appropriate handling of port forwarding.
 ```
@@ -36,3 +38,15 @@ nc -z -v -w5 0.tcp.ngrok.io 16890
 The redis url for use with `redis.Redis.from_url()` is of the form
 * `redis://:mypass@ec2-54-153-82-98.us-west-1.compute.amazonaws.com:6379`
 * `redis://:mypass@0.tcp.ngrok.io:16890`
+
+### With docker (or singularity)
+
+Redis has a docker container, so we can just use that. With Singularity, the
+incantation matching the instructions from the previous section would be
+```bash
+singularity exec docker://redis redis-server --port 50013 --requirepass mypass --loglevel verbose
+```
+Once it's running, we can test it from another host with netcat:
+```bash
+(printf "AUTH mypass\nPING\n";) | nc <hostname> 50013
+```
