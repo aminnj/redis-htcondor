@@ -34,7 +34,8 @@ class Manager(object):
         if not include_stats:
             return df.set_index("name")
         def f(meta):
-            p = psutil.Process().parent() # need parent of this thread
+            import psutil
+            p = psutil.Process()
             t1 = time.time()
             net1 = psutil.net_io_counters()
             disk1 = psutil.disk_io_counters()
@@ -52,24 +53,27 @@ class Manager(object):
         self.r.publish(self.user+":channel1",compress_and_dumps(f))
         # wait 1 more second than the process should've slept and fetch results in one shot
         time.sleep(stat_integration_time+1.)
-        pipe = m.r.pipeline()
+        pipe = self.r.pipeline()
         pipe.lrange(self.user+":channel1results",0,-1)
         pipe.delete(self.user+":channel1results")
         results = pipe.execute()[0]
         def f(x):
             d = decompress_and_loads(x)
             ret = {}
-            ret["name"] = d["meta"]["worker_name"]
-            ret["worker_time_elapsed"] = d["meta"]["total_time_elapsed"]
-            ret["worker_write_bytes"] = d["meta"]["total_write_bytes"]
-            ret["worker_read_bytes"] = d["meta"]["total_read_bytes"]
-            ret["worker_tasks"] = d["meta"]["total_tasks"]
-            ret["worker_mem_used"] = d["mem_used"]
-            ret["node_dt"] = d["t2"]-d["t1"]
-            ret["node_read_bytes"] = d["disk2"].read_bytes-d["disk1"].read_bytes
-            ret["node_write_bytes"] = d["disk2"].write_bytes-d["disk1"].write_bytes
-            ret["node_recv_bytes"] = d["net2"].bytes_recv-d["net1"].bytes_recv
-            ret["node_sent_bytes"] = d["net2"].bytes_sent-d["net1"].bytes_sent
+            try:
+                ret["name"] = d["meta"]["worker_name"]
+                ret["worker_time_elapsed"] = d["meta"]["total_time_elapsed"]
+                ret["worker_write_bytes"] = d["meta"]["total_write_bytes"]
+                ret["worker_read_bytes"] = d["meta"]["total_read_bytes"]
+                ret["worker_tasks"] = d["meta"]["total_tasks"]
+                ret["worker_mem_used"] = d["mem_used"]
+                ret["node_dt"] = d["t2"]-d["t1"]
+                ret["node_read_bytes"] = d["disk2"].read_bytes-d["disk1"].read_bytes
+                ret["node_write_bytes"] = d["disk2"].write_bytes-d["disk1"].write_bytes
+                ret["node_recv_bytes"] = d["net2"].bytes_recv-d["net1"].bytes_recv
+                ret["node_sent_bytes"] = d["net2"].bytes_sent-d["net1"].bytes_sent
+            except:
+                pass
             return ret
         df["node"] = df["name"].str.split("__").str[1]
         df = df.merge(pd.DataFrame(map(f,results)),on="name",how="outer").set_index("name")
@@ -94,9 +98,61 @@ class Manager(object):
     def remote_map(self, func, vargs, return_metadata=True,
                    progress_bar=True,reuse_chunking=False,worker_names=[],
                    shuffle_chunks=False,
+                   blocking=True,
                   ):
         self.clear_queues()
 
+        vargs, worker_names = self.optimize_chunking(vargs, worker_names, reuse_chunking=reuse_chunking, shuffle_chunks=shuffle_chunks)
+
+        vals = [compress_and_dumps([func,args]) for args in vargs]
+
+        # If user specified enough worker names to cover all tasks we will submit,
+        # then submit them to those workers specifically, otherwise
+        # submit to the general task queue
+        if len(worker_names) >= len(vals):
+            pipe = self.r.pipeline()
+            for worker_name,val in zip(worker_names,vals):
+                self.r.lpush("{}:tasks".format(worker_name),val)
+            pipe.execute()
+        else:
+            self.r.lpush(self.qname_tasks,*vals)
+
+
+        def results_generator(self):
+            # Read results from broker
+            results = []
+            ntasks = len(vargs)
+            bar = tqdm(total=len(vargs), disable=not progress_bar) #, unit_scale=True,unit="event")
+            while len(results) < ntasks:
+                tofetch = self.r.llen(self.qname_results)
+                # avoid spamming pops requests too fast
+                if tofetch == 0:
+                    time.sleep(0.5)
+                    continue
+                pipe = self.r.pipeline()
+                for _ in range(tofetch):
+                    pipe.brpop(self.qname_results)
+                popchunk = pipe.execute()
+                for pc in popchunk:
+                    if pc is None: continue
+                    qname,res_raw = pc
+                    res = decompress_and_loads(res_raw)
+                    if return_metadata:
+                        results.append(res)
+                        yield res
+                    else:
+                        results.append(res[0])
+                        yield res[0]
+                    bar.update(1)
+            bar.close()
+            self.remote_results = results
+
+        if blocking:
+            return list(results_generator(self))
+        else:
+            return results_generator(self)
+
+    def optimize_chunking(self, vargs, worker_names, reuse_chunking=False, shuffle_chunks=False):
         # If the previous chunking matches the current chunking, then
         # use the old chunks and corresponding worker names to make use of
         # cached branches
@@ -118,57 +174,5 @@ class Manager(object):
             else:
                 random.shuffle(vargs)
 
-        vals = [compress_and_dumps([func,args]) for args in vargs]
-
-
-        # If user specified enough worker names to cover all tasks we will submit,
-        # then submit them to those workers specifically, otherwise
-        # submit to the general task queue
-        if len(worker_names) >= len(vals):
-            pipe = self.r.pipeline()
-            for worker_name,val in zip(worker_names,vals):
-                self.r.lpush("{}:tasks".format(worker_name),val)
-            pipe.execute()
-        else:
-            self.r.lpush(self.qname_tasks,*vals)
-
-
-        # Read results from broker
-        results = []
-        bar = tqdm(total=len(vargs), disable=not progress_bar) #, unit_scale=True,unit="event")
-#         last_fetch = 0
-        while len(results) < len(vargs):
-
-#             pipe = self.r.pipeline()
-#             pipe.lrange(self.qname_results,0,-1)
-#             pipe.delete(self.qname_results)
-#             popchunk = pipe.execute()[0]
-#             # avoid spamming requests too fast
-#             now = time.time()
-#             if now-last_fetch < 0.5:
-#                 time.sleep(0.5)
-#             last_fetch = now
-
-            time.sleep(0.1)
-            tofetch = self.r.llen(self.qname_results)
-            # avoid spamming pops requests too fast
-            if tofetch == 0:
-                time.sleep(0.5)
-                continue
-            pipe = self.r.pipeline()
-            for _ in range(tofetch):
-                pipe.brpop(self.qname_results)
-            popchunk = pipe.execute()
-            for pc in popchunk:
-                if pc is None: continue
-                qname,res_raw = pc
-                res = decompress_and_loads(res_raw)
-                if return_metadata:
-                    results.append(res)
-                else:
-                    results.append(res[0])
-                bar.update(1)
-        bar.close()
-        self.remote_results = results
-        return results
+        return vargs, worker_names
 
