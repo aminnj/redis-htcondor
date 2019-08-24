@@ -32,8 +32,12 @@ def decompress_and_loads(obj):
 def get_function_kwargs(func):
     # https://stackoverflow.com/questions/2088056/get-kwargs-inside-function
     spec = inspect.getfullargspec(func)
-    if not spec.defaults: return {}
-    return dict(zip(spec.args[::-1], spec.defaults[::-1]))
+    if spec.defaults:
+        return dict(zip(spec.args[::-1], spec.defaults[::-1]))
+    elif spec.kwonlyargs:
+        return spec.kwonlydefaults
+    else:
+        return {}
 
 if __name__ == "__main__":
 
@@ -64,7 +68,7 @@ if __name__ == "__main__":
 
     try:
         import uproot
-        array_cache = uproot.ArrayCache("4 GB")
+        array_cache = uproot.ArrayCache("8 GB")
     except:
         print("uproot not found, so can't make an ArrayCache")
 
