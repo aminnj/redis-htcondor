@@ -1,5 +1,7 @@
 ## Introduction
 
+### Motivation
+
 The specific goal of this repository is to analyze CMS NanoAOD ROOT files with [uproot](https://github.com/scikit-hep/uproot)
 in a similar style to [coffea](https://github.com/CoffeaTeam/coffea), but using a master/manager
 that sends computing tasks to workers running in an HTCondor batch system.
@@ -22,7 +24,23 @@ so there's no real need for complex dynamic logic, direct inter-worker
 communication, DAGs, etc, and this relies on exactly one redis master server
 (one single public-facing ip/port).
 
+### Overview
+
+I'm picking parts from the previous libraries as I go including
+what's most relevant/allowed for my use case. As the base, the task system, described
+in more detail [here](notes/minimal_queue.md), takes functions and arguments
+from the user and serializes them with cloudpickle and compresses with lz4 
+before sending these out to workers which call the functions and return the
+output to the user.
+
+TODO items are [here](notes/todo.md).
+
+
 ## Quick start
+
+If someone has not already setup the redis master server, instructions
+to do that are [here](notes/installing_redis.md).
+
 
 Initial set up for workers:
 ```bash
@@ -30,7 +48,7 @@ Initial set up for workers:
 git clone https://github.com/aminnj/redis-htcondor
 cd redis-htcondor
 
-# Make the tarball'ed environment for the worker nodes.
+# Make the tarball'ed environment for the condor worker nodes.
 scripts/make_worker_tarball.sh
 
 # Submit a couple of workers initially. Ask around for the redis url.

@@ -4,7 +4,8 @@ Removing all abstractions and fanciness, a minimal example of a
 task queue might look like the following two files. In the main script, we put
 functions and arguments into a tasks queue, which a worker will
 poll and work on. The worker puts the output into the results queue,
-which the main script reads from and returns to the user.
+which the main script reads from and returns to the user. Workers
+don't/can't talk to each other.
 
 
 A very simple `worker.py` to be run in one terminal:
