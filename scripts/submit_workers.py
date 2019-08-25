@@ -29,10 +29,20 @@ queue {num_workers}
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("redis_url", help="redis url of the form redis://:password@hostname:port")
+    parser.add_argument("-r", "--redis_url", help="redis url of the form redis://:password@hostname:port "
+            "(if not specified, attempts to use the result of `from config import REDIS_URL`)", default="")
     parser.add_argument("-d", "--dry_run", help="echo submit file, but don't submit", action="store_true")
     parser.add_argument("-n", "--num_workers", help="number of workers", default=1, type=int)
     args = parser.parse_args()
+
+    redis_url = args.redis_url
+    if not redis_url:
+        try:
+            from config import REDIS_URL as default_redis_url
+            redis_url = default_redis_url
+        except ImportError as e:
+            raise Exception("You didn't specify a redis url, and I couldn't find one in config.REDIS_URL")
+
 
     extra_requirements = "True"
     blacklisted_machines = [
@@ -43,11 +53,15 @@ if __name__ == "__main__":
             ]
     if blacklisted_machines:
         extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
+    whitelisted_machines = [
+            ]
+    if whitelisted_machines:
+        extra_requirements = " || ".join(map(lambda x: '(TARGET.Machine == "{0}")'.format(x),whitelisted_machines))
 
     content = template.format(
             extra_requirements=extra_requirements,
             num_workers=args.num_workers,
-            redis_url=args.redis_url,
+            redis_url=redis_url,
             )
 
     f = tempfile.NamedTemporaryFile(delete=False)

@@ -20,7 +20,13 @@ def decompress_and_loads(obj):
     return cloudpickle.loads(lz4.frame.decompress(obj))
 
 class Manager(object):
-    def __init__(self,redis_url,qname_results=None,qname_tasks=None,):
+    def __init__(self,redis_url=None,qname_results=None,qname_tasks=None):
+        if not redis_url:
+            try:
+                from config import REDIS_URL
+                redis_url = REDIS_URL
+            except ImportError as e:
+                raise Exception("You didn't specify a redis url, and I couldn't find one in config.REDIS_URL")
         self.redis_url = redis_url
         self.r = redis.Redis.from_url(redis_url)
         self.user = os.getenv("USER")
@@ -133,9 +139,9 @@ class Manager(object):
                 pipe.lrange(self.qname_results,0,-1)
                 pipe.delete(self.qname_results)
                 popchunk = pipe.execute()[0]
-                for pc in popchunk:
+                for pc in popchunk[::-1]:
                     if pc is None: continue
-                    qname,res_raw = pc
+                    res_raw = pc
                     res = decompress_and_loads(res_raw)
                     if return_metadata:
                         results.append(res)
