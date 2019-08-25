@@ -127,12 +127,12 @@ class Manager(object):
                 tofetch = self.r.llen(self.qname_results)
                 # avoid spamming pops requests too fast
                 if tofetch == 0:
-                    time.sleep(0.5)
+                    time.sleep(0.4)
                     continue
                 pipe = self.r.pipeline()
-                for _ in range(tofetch):
-                    pipe.brpop(self.qname_results)
-                popchunk = pipe.execute()
+                pipe.lrange(self.qname_results,0,-1)
+                pipe.delete(self.qname_results)
+                popchunk = pipe.execute()[0]
                 for pc in popchunk:
                     if pc is None: continue
                     qname,res_raw = pc
