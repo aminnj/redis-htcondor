@@ -41,6 +41,11 @@ TODO items are [here](notes/todo.md).
 If someone has not already setup the redis master server, instructions
 to do that are [here](notes/installing_redis.md).
 
+While later scripts will accept a redis url to connect to, it's more convenient to specify it once,
+so make a `config.py` file in the current directory containing the following line (appropriately modified)
+```
+REDIS_URL = "redis://:mypass@hostname:port"
+```
 
 Initial set up for workers:
 ```bash
@@ -52,12 +57,13 @@ cd redis-htcondor
 scripts/make_worker_tarball.sh
 
 # Submit a couple of workers initially. Ask around for the redis url.
-scripts/submit_workers.py redis://:mypass@hostname:port --num_workers 2
+scripts/submit_workers.py --num_workers 2
 ```
 
 Launch jupyter notebook for analysis:
 ```bash
 # Before executing, edit the port in this file to avoid clashes with other users
+# who also are running jupyter notebooks on the same machine
 scripts/start_analysis_server.sh
 
 # visit the url printed out at the end and make sure to forward the port to your laptop first. e.g.,
@@ -68,11 +74,17 @@ ssh -N -f -L localhost:8895:localhost:8895 uaf-10.t2.ucsd.edu
 
 ## Example usage
 
+Start a local worker
 ```python
-import manager
-m = Manager("redis://:pass@hostname:port")
-def f(x):
-    return x**2
-results = m.remote_map(f,range(10))
+>>> from worker import Worker
+>>> w = Worker("redis://:mypass@hostname:port")
+>>> w.run() # this blocks indefinitely
+```
+
+In a separate process,
+```python
+>>> from manager import Manager
+>>> m = Manager()
+>>> results = m.remote_map(lambda x:x**2,range(10))
 [0, 4, 1, 16, 25, 9, 49, 64, 81, 36]
 ```
