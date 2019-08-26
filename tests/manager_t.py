@@ -46,7 +46,7 @@ class ManagerTest(unittest.TestCase):
 
         results = self.m.remote_map(lambda x: time.sleep(
             0.1), range(num_workers*2), return_metadata=True)
-        worker_names = set([r[1]["worker_name"] for r in results])
+        worker_names = set([r["worker_name"] for r in results])
         self.assertEqual(len(worker_names), num_workers)
         self.assertEqual(len(self.m.get_worker_info()), num_workers)
 
@@ -62,8 +62,8 @@ class ManagerTest(unittest.TestCase):
         results = self.m.remote_map(lambda x: x, all_worker_names,
                                     worker_names=all_worker_names, return_metadata=True)
         self.assertEqual(
-            [r[0] for r in results],
-            [r[1]["worker_name"] for r in results]
+            [r["result"] for r in results],
+            [r["worker_name"] for r in results]
         )
         self.m.stop_all_workers()
 

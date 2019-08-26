@@ -140,10 +140,11 @@ class Worker(object):
                 tstop=t1,
                 read_bytes=read_bytes,
                 write_bytes=write_bytes,
+                result=res,
             )
 
             # regardless of the incoming queue, push into general results queue
-            self.r.lpush(self.user+":results", compress_and_dumps([res, meta]))
+            self.r.lpush(self.user+":results", compress_and_dumps(meta))
 
             if self.verbose:
                 print("Pushed result to queue")

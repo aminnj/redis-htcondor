@@ -161,14 +161,11 @@ class Manager(object):
                 for pc in popchunk[::-1]:
                     if pc is None:
                         continue
-                    res_raw = pc
-                    res = decompress_and_loads(res_raw)
-                    if return_metadata:
-                        results.append(res)
-                        yield res
-                    else:
-                        results.append(res[0])
-                        yield res[0]
+                    res = decompress_and_loads(pc)
+                    if not return_metadata:
+                        res = res["result"]
+                    results.append(res)
+                    yield res
                     bar.update(1)
             bar.close()
             self.remote_results = results
