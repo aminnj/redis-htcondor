@@ -4,7 +4,7 @@ import time
 import logging
 import concurrent.futures
 
-from manager import compress_and_dumps, decompress_and_loads
+from utils import compress_and_dumps, decompress_and_loads
 
 
 class UtilsTest(unittest.TestCase):

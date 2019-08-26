@@ -1,15 +1,18 @@
-import sys
-import cloudpickle
-import redis
-import lz4.frame
-import subprocess
-import os
 import argparse
-import time
-import psutil
-import traceback
-import random
 import inspect
+import os
+import random
+import subprocess
+import sys
+import time
+import traceback
+
+import redis
+import psutil
+
+from utils import (compress_and_dumps, 
+                   decompress_and_loads, 
+                   get_function_kwargs)
 
 ARRAY_CACHE = None
 try:
@@ -33,25 +36,6 @@ def get_classads():
             k, v = line.split("=", 1)
             d[k.strip()] = v.strip().lstrip('"').strip('"')
     return d
-
-
-def compress_and_dumps(obj):
-    return lz4.frame.compress(cloudpickle.dumps(obj), compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC)
-
-
-def decompress_and_loads(obj):
-    return cloudpickle.loads(lz4.frame.decompress(obj))
-
-
-def get_function_kwargs(func):
-    # https://stackoverflow.com/questions/2088056/get-kwargs-inside-function
-    spec = inspect.getfullargspec(func)
-    if spec.defaults:
-        return dict(zip(spec.args[::-1], spec.defaults[::-1]))
-    elif spec.kwonlyargs:
-        return spec.kwonlydefaults
-    else:
-        return {}
 
 
 class Worker(object):

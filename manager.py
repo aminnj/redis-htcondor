@@ -10,18 +10,8 @@ import lz4.frame
 import pandas as pd
 from tqdm.auto import tqdm
 
-# pickle and unpickle (to/from string) with lz4 compression
-# note, cloudpickle requires same python version used locally and on worker!!
-# this could be relaxed with a different pickle protocol in dumps(), but then life gets messier
-
-
-def compress_and_dumps(obj):
-    return lz4.frame.compress(cloudpickle.dumps(obj), compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC)
-
-
-def decompress_and_loads(obj):
-    return cloudpickle.loads(lz4.frame.decompress(obj))
-
+from utils import (compress_and_dumps, 
+                   decompress_and_loads)
 
 class Manager(object):
     def __init__(self, redis_url=None, qname_results=None, qname_tasks=None, progress_bars=True):

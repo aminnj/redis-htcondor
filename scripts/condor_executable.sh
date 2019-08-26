@@ -30,6 +30,7 @@ mkdir temp
 cd temp
 mv ../workerenv.tar.xz .
 mv ../worker.py .
+mv ../utils.py .
 tar xf workerenv.tar.xz
 
 ls -lrth
