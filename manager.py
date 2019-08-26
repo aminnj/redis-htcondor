@@ -20,7 +20,7 @@ def decompress_and_loads(obj):
     return cloudpickle.loads(lz4.frame.decompress(obj))
 
 class Manager(object):
-    def __init__(self,redis_url=None,qname_results=None,qname_tasks=None):
+    def __init__(self,redis_url=None,qname_results=None,qname_tasks=None,progress_bars=True):
         if not redis_url:
             try:
                 from config import REDIS_URL
@@ -33,6 +33,7 @@ class Manager(object):
         self.qname_results = qname_results if qname_results else self.user+":results"
         self.qname_tasks = qname_tasks if qname_tasks else self.user+":tasks"
         self.remote_results = []
+        self.progress_bars = progress_bars
 
     def get_worker_info(self, include_stats=False, stat_integration_time=2.0):
         df = pd.DataFrame(self.r.client_list()).query("flags!='N'")[["addr","name","age","id","idle"]]
@@ -91,9 +92,9 @@ class Manager(object):
     def get_broker_info(self):
         return self.r.info("all") #["cmdstat_brpop"]
 
-    def local_map(self, func, vargs,progress_bar=True):
+    def local_map(self, func, vargs):
         results = []
-        bar = tqdm(vargs, disable=not progress_bar)
+        bar = tqdm(vargs, disable=not self.progress_bars)
         for args in bar:
             results.append(func(args))
         return results
@@ -101,15 +102,28 @@ class Manager(object):
     def clear_queues(self):
         self.r.delete(self.qname_results,self.qname_tasks)
 
+    def stop_all_workers(self,**kwargs):
+        self.remote_map(lambda x:x, ["STOP"]*len(self.get_worker_info()),**kwargs)
+
     def remote_map(self, func, vargs, return_metadata=True,
-                   progress_bar=True,reuse_chunking=False,worker_names=[],
+                   reuse_chunking=False,worker_names=[],
                    shuffle_chunks=False,
                    blocking=True,
                   ):
+
+        # If user tries to send more than 2MB (compressed) to each worker, stop them!
+        if len(vargs):
+            compressed_size_mb = len(compress_and_dumps([func,vargs[0]]))/1e6
+            if compressed_size_mb > 2:
+                raise RuntimeError(
+                        "You're trying to send {:.1f}MB (more than 2MB) through the server. "
+                        "This will slow things down. Please check your function and arguments.".format(compressed_size_mb)
+                        )
+
+        # Remove leftover/errored tasks
         self.clear_queues()
 
         vargs, worker_names = self.optimize_chunking(vargs, worker_names, reuse_chunking=reuse_chunking, shuffle_chunks=shuffle_chunks)
-
         vals = [compress_and_dumps([func,args]) for args in vargs]
 
         # If user specified enough worker names to cover all tasks we will submit,
@@ -123,12 +137,11 @@ class Manager(object):
         else:
             self.r.lpush(self.qname_tasks,*vals)
 
-
         def results_generator(self):
             # Read results from broker
             results = []
             ntasks = len(vargs)
-            bar = tqdm(total=len(vargs), disable=not progress_bar) #, unit_scale=True,unit="event")
+            bar = tqdm(total=len(vargs), disable=not self.progress_bars) #, unit_scale=True,unit="event")
             while len(results) < ntasks:
                 tofetch = self.r.llen(self.qname_results)
                 # avoid spamming pops requests too fast
