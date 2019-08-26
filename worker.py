@@ -9,7 +9,6 @@ import time
 import psutil
 import traceback
 import random
-import diskcache
 import inspect
 
 ARRAY_CACHE = None
@@ -18,6 +17,8 @@ try:
     ARRAY_CACHE = uproot.ArrayCache("8 GB")
 except ImportError as e:
     print(e,"so we can't make a global ArrayCache")
+except AttributeError as e:
+    print(e," Maybe this is an older version of uproot without ArrayCache?")
 
 def get_classads():
     fname = os.getenv("_CONDOR_JOB_AD")
@@ -111,9 +112,13 @@ class Worker(object):
 
             if self.verbose: print("Got another task")
 
-            ioc = p.io_counters()
-            read_bytes0 = ioc.read_bytes
-            write_bytes0 = ioc.write_bytes
+            try:
+                ioc = p.io_counters()
+                read_bytes0 = ioc.read_bytes
+                write_bytes0 = ioc.write_bytes
+            except AttributeError:
+                # MacOS doesn't have io_counters
+                pass
 
             t0 = time.time()
             try:
@@ -127,9 +132,13 @@ class Worker(object):
                 res = traceback.format_exc()
             t1 = time.time()
 
-            ioc = p.io_counters()
-            read_bytes = ioc.read_bytes-read_bytes0
-            write_bytes = ioc.write_bytes-write_bytes0
+            try:
+                ioc = p.io_counters()
+                read_bytes = ioc.read_bytes-read_bytes0
+                write_bytes = ioc.write_bytes-write_bytes0
+            except AttributeError:
+                read_bytes = 0
+                write_bytes = 0
 
             meta = dict(
                 worker_name=self.worker_name,
@@ -142,6 +151,8 @@ class Worker(object):
 
             # regardless of the incoming queue, push into general results queue
             self.r.lpush(self.user+":results",compress_and_dumps([res,meta]))
+
+            if self.verbose: print("Pushed result to queue")
 
             # if we got the poison pill, stop after lpush for at least some acknowledgment
             if args == "STOP":
