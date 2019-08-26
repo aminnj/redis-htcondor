@@ -90,7 +90,7 @@ class Manager(object):
         return df
 
     def get_broker_info(self):
-        return self.r.info("all") #["cmdstat_brpop"]
+        return self.r.info("all")
 
     def local_map(self, func, vargs):
         results = []
@@ -103,7 +103,7 @@ class Manager(object):
         self.r.delete(self.qname_results,self.qname_tasks)
 
     def stop_all_workers(self,**kwargs):
-        self.remote_map(lambda x:x, ["STOP"]*len(self.get_worker_info()),**kwargs)
+        return self.remote_map(lambda x:x, ["STOP"]*len(self.get_worker_info()),**kwargs)
 
     def remote_map(self, func, vargs, return_metadata=True,
                    reuse_chunking=False,worker_names=[],
