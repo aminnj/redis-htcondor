@@ -21,3 +21,6 @@ they are called non-blocking)
 * `requirements.txt` or pip-able
 
 * redis url (and maybe other things) in a `config.py` file
+
+* Instead of `return_metadata` returning a list of pairs (result,metadata dict), just have it
+return a dict where the result is a key in the metadata dict, and no need for pairs
