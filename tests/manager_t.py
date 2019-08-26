@@ -32,7 +32,7 @@ class ManagerTest(unittest.TestCase):
         self.assertEqual(set(results), set(range(5)))
 
     def test_one_worker(self):
-        executor, futures = start_workers(1)
+        _ = start_workers(1)
         time.sleep(0.2)
         results = self.m.remote_map(
             lambda x: x, range(5), return_metadata=False)
@@ -41,7 +41,7 @@ class ManagerTest(unittest.TestCase):
 
     def test_few_workers(self):
         num_workers = 8
-        executor, futures = start_workers(num_workers)
+        _ = start_workers(num_workers)
         time.sleep(0.2)
 
         results = self.m.remote_map(lambda x: time.sleep(
@@ -55,7 +55,7 @@ class ManagerTest(unittest.TestCase):
 
     def test_worker_scheduling(self):
         num_workers = 4
-        executor, futures = start_workers(num_workers)
+        _ = start_workers(num_workers)
         time.sleep(0.2)
 
         all_worker_names = self.m.get_worker_info().index
@@ -69,7 +69,7 @@ class ManagerTest(unittest.TestCase):
 
     def test_nonblocking(self):
         num_workers = 4
-        executor, futures = start_workers(num_workers)
+        _ = start_workers(num_workers)
         time.sleep(0.2)
         results_generator = self.m.remote_map(lambda x: time.sleep(0.1), range(10),
                                               return_metadata=True, blocking=False)
@@ -79,7 +79,7 @@ class ManagerTest(unittest.TestCase):
         self.m.stop_all_workers()
 
     def test_payload_size_limits(self):
-        executor, futures = start_workers(1)
+        _ = start_workers(1)
         time.sleep(0.2)
         # Make a function that has 5MB worth of random floats
         # so that it doesn't get compressed below 5MB
