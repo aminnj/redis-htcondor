@@ -39,25 +39,30 @@ TODO items are [here](notes/todo.md).
 
 ## Quick start
 
+Clone the repository and work inside it:
+```bash
+git clone https://github.com/aminnj/redis-htcondor
+cd redis-htcondor
+```
+
 If someone has not already setup the redis master server, instructions
 to do that are [here](notes/installing_redis.md).
 
 While later scripts will accept a redis url to connect to, it's more convenient to specify it once,
-so make a `config.py` file in the current directory containing the following line (appropriately modified)
+so make a `config.py` file in the current directory containing the following line (appropriately modified
+to point to the already-running server)
 ```
 REDIS_URL = "redis://:mypass@hostname:port"
 ```
 
 Initial set up for workers:
 ```bash
-# Clone this repository and `cd` in.
-git clone https://github.com/aminnj/redis-htcondor
-cd redis-htcondor
-
-# Make the tarball'ed environment for the condor worker nodes.
+# Make the tarballed environment for the condor worker nodes.
+# This essentially tarballs a virtualenv with the minimal python
+# dependencies for the worker.
 scripts/make_worker_tarball.sh
 
-# Submit a couple of workers initially. Ask around for the redis url.
+# Submit a couple of workers initially
 scripts/submit_workers.py --num_workers 2
 ```
 
