@@ -37,8 +37,11 @@ def plot_timeflow(results, ax=None):
         height = 15
     if ax is None:
         fig, ax = plt.subplots(figsize=(15, height))
+    dt = df["tstop"]-df["tstart"]
+    colors = np.array(["C0"]*len(df))
+    colors[dt > dt.mean()+dt.std()*5] = "C3"
     ax.barh(df["worker_name"].cat.codes, df["tstop"]-df["tstart"],
-            left=df["tstart"], height=1.0, edgecolor="k", fc="C0")
+            left=df["tstart"], height=1.0, edgecolor="k", color=colors)
     ax.set_xlabel("elapsed time since start [s]", fontsize="x-large")
     ax.set_ylabel("worker number", fontsize="x-large")
     wtime = (df["tstop"]-df["tstart"]).sum()
@@ -92,7 +95,7 @@ def plot_cumulative_events(results, ax=None):
     """
     Same inputs as `plot_timeflow`
     """
-    df = pd.DataFrame([result[1] for result in results])
+    df = pd.DataFrame(results)
     try:
         df["estart"] = df["args"].str[1]
         df["estop"] = df["args"].str[2]
