@@ -2,6 +2,7 @@ import cloudpickle
 import lz4.frame
 import functools
 import inspect
+import concurrent.futures
 
 def compress_and_dumps(obj):
     return lz4.frame.compress(cloudpickle.dumps(obj), compression_level=lz4.frame.COMPRESSIONLEVEL_MINHC)
