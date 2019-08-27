@@ -15,7 +15,7 @@ def plot_timeflow(results, ax=None):
     as well as a `worker_name` identifier.
     """
     data = []
-    dfr = pd.DataFrame([result[1] for result in results]).sort_values(
+    dfr = pd.DataFrame(results).sort_values(
         "worker_name").groupby("worker_name")
     for worker, df in dfr:
         starts = df.tstart.values
@@ -53,7 +53,7 @@ def plot_cumulative_read(results, ax=None):
     """
     Same inputs as `plot_timeflow`
     """
-    df = pd.DataFrame([result[1] for result in results])
+    df = pd.DataFrame(results)
     df["elapsed"] = df["tstop"]-df["tstart"]
     df[["tstart", "tstop"]] -= df["tstart"].min()
     df = df.sort_values("tstop")
