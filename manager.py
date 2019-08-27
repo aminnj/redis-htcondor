@@ -30,10 +30,20 @@ class Manager(object):
         self.remote_results = []
         self.progress_bars = progress_bars
 
+    def __repr__(self):
+        def valid(x):
+            return (x["flags"]!="N") and (x["name"].startswith(self.user))
+        return "<Manager: broker='{}', workers={}>".format(
+                self.redis_url,
+                sum(map(valid,self.r.client_list())),
+                )
+
     def get_worker_info(self, include_stats=False, stat_integration_time=2.0):
-        df = pd.DataFrame(self.r.client_list()).query("flags!='N'")[
-            ["addr", "name", "age", "id", "idle"]]
-        df = df[df["name"].str.startswith(self.user+"__")]
+        def valid(x):
+            return (x["flags"]!="N") and (x["name"].startswith(self.user))
+        df = pd.DataFrame([c for c in self.r.client_list() if valid(c)])
+        if df.empty: return pd.DataFrame()
+        df = df[["addr", "name", "age", "id", "idle"]]
         if not include_stats:
             return df.set_index("name")
 
@@ -179,11 +189,10 @@ class Manager(object):
         # If the previous chunking matches the current chunking, then
         # use the old chunks and corresponding worker names to make use of
         # cached branches
-        if reuse_chunking and self.remote_results and (type(self.remote_results[0]) in [tuple, list]) and len(self.remote_results[0]) == 2:
-            old_vargs = [r[1]["args"] for r in self.remote_results]
-            old_worker_names = [r[1]["worker_name"]
-                                for r in self.remote_results]
-            if (type(vargs) in [tuple, list]) and (sorted(map(tuple, vargs)) == sorted(map(tuple, old_vargs))):
+        if reuse_chunking and self.remote_results and (type(self.remote_results[0]) == dict):
+            old_vargs = [r["args"] for r in self.remote_results]
+            old_worker_names = [r["worker_name"] for r in self.remote_results]
+            if (type(vargs[0]) in [tuple, list]) and (sorted(map(tuple, vargs)) == sorted(map(tuple, old_vargs))):
                 vargs = old_vargs
                 worker_names = old_worker_names
                 print("Current chunking matches old chunking, so we will re-use the old worker ordering "
