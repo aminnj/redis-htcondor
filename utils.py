@@ -21,6 +21,15 @@ def get_function_kwargs(func):
     else:
         return {}
 
+# def get_redis_url():
+#     try:
+#         from config import REDIS_URL
+#         return REDIS_URL
+#     except ImportError as e:
+#         raise Exception("You didn't specify a redis url, and I couldn't find one in config.REDIS_URL")
+#     return None
+
+
 @functools.lru_cache(maxsize=256)
 def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_files=False):
     """

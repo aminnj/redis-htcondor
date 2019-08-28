@@ -66,7 +66,7 @@ print(results)
   * Now what about caching? According to https://stackoverflow.com/questions/45008852/how-to-store-worker-local-variables-in-dask-distributed we could store an arraycache in the global worker state
   * Implement caching by broadcasting a function start an array cache,then submit jobs, then calculate event rate with `distributed.as_completed`. next time, map with a worker list (how to get this?)
   * Or maybe we just preload the cache? https://github.com/dask/distributed/pull/1016
-    * `dask-worker tcp://169.228.130.74:8786 --memory-limit 8GB --nprocs 1 --nthreads 1 --preload blah.py`
+    * `dask-worker tcp://169.228.130.74:8786 --memory-limit 8GB --nprocs 1 --nthreads 1 --preload cachepreload.py`
 
 ### Ray
 

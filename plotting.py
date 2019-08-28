@@ -15,8 +15,7 @@ def plot_timeflow(results, ax=None):
     as well as a `worker_name` identifier.
     """
     data = []
-    dfr = pd.DataFrame(results).sort_values(
-        "worker_name").groupby("worker_name")
+    dfr = pd.DataFrame(results).sort_values(["worker_name","tstart","tstop"]).groupby("worker_name")
     for worker, df in dfr:
         starts = df.tstart.values
         stops = df.tstop.values
@@ -31,7 +30,7 @@ def plot_timeflow(results, ax=None):
     height = 3
     if df["worker_name"].nunique() > 30:
         height = 5
-    if df["worker_name"].nunique() >= 100:
+    if df["worker_name"].nunique() >= 80:
         height = 9
     if df["worker_name"].nunique() >= 200:
         height = 15
@@ -41,15 +40,17 @@ def plot_timeflow(results, ax=None):
     colors = np.array(["C0"]*len(df))
     colors[dt > dt.mean()+dt.std()*5] = "C3"
     ax.barh(df["worker_name"].cat.codes, df["tstop"]-df["tstart"],
-            left=df["tstart"], height=1.0, edgecolor="k", color=colors)
+            left=df["tstart"], height=1.0, linewidth=0.5, edgecolor="k", color=colors)
     ax.set_xlabel("elapsed time since start [s]", fontsize="x-large")
     ax.set_ylabel("worker number", fontsize="x-large")
     wtime = (df["tstop"]-df["tstart"]).sum()
     ttime = df["tstop"].max()*df["worker_name"].nunique()
     ax.set_xlim([0., df["tstop"].max()])
-    ax.set_title(
-        "efficiency (filled/total) = {:.1f}%".format(100.0*wtime/ttime))
-    return fig, ax
+    ax.set_title(", ".join([
+        "efficiency (filled/total) = {:.1f}%".format(100.0*wtime/ttime),
+        "mean task time = {:.1f}ms".format(1e3*dfr.apply(lambda x:x["tstop"]-x["tstart"]).mean()),
+        "mean intertask time = {:.1f}ms".format(1e3*dfr.apply(lambda x:x["tstart"].shift(-1)-x["tstop"]).mean()),
+        ]))
 
 
 def plot_cumulative_read(results, ax=None):
@@ -81,14 +82,10 @@ def plot_cumulative_read(results, ax=None):
     m, b = np.polyfit(xs[better & central], ys[better & central], 1)
     ax.plot(xs[better & central], m*xs[better & central] + b,
             label="fit ({:.2f}GB/s)".format(m))
-
     ax.set_xlabel("time since start [s]")
     ax.set_ylabel("cumulative read GB")
-    ax.set_title(
-        "Read {:.2f}GB in {:.2f}s @ {:.3f}GB/s".format(ys.max(), xs.max(), ys.max()/xs.max()))
-
+    ax.set_title("Read {:.2f}GB in {:.2f}s @ {:.3f}GB/s".format(ys.max(), xs.max(), ys.max()/xs.max()))
     ax.legend()
-    return fig, ax
 
 
 def plot_cumulative_events(results, ax=None):
@@ -125,12 +122,9 @@ def plot_cumulative_events(results, ax=None):
     m, b = np.polyfit(xs[better & central], ys[better & central], 1)
     ax.plot(xs[better & central], m*xs[better & central] + b,
             label="fit ({:.2f}Mevents/s)".format(m))
-
     ax.set_xlabel("time since start [s]")
     ax.set_ylabel("cumulative Mevents")
     ax.set_title("Processed {:.2f}Mevents in {:.2f}s @ {:.3f}MHz".format(
         ys.max(), xs.max(), ys.max()/xs.max()))
-
     ax.legend()
-    return fig, ax
 

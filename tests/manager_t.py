@@ -25,17 +25,16 @@ class ManagerTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.m = Manager(REDIS_URL, progress_bars=False)
+        cls.m = Manager(REDIS_URL
 
     def test_local_map(self):
-        results = self.m.local_map(lambda x: x, range(5))
+        results = self.m.local_map(lambda x: x, range(5), progress_bar=False)
         self.assertEqual(set(results), set(range(5)))
 
     def test_one_worker(self):
         _ = start_workers(1)
         time.sleep(0.2)
-        results = self.m.remote_map(
-            lambda x: x, range(5), return_metadata=False)
+        results = self.m.remote_map(lambda x: x, range(5), return_metadata=False, progress_bar=False)
         self.assertEqual(set(results), set(range(5)))
         self.m.stop_all_workers()
 
@@ -45,7 +44,7 @@ class ManagerTest(unittest.TestCase):
         time.sleep(0.2)
 
         results = self.m.remote_map(lambda x: time.sleep(
-            0.1), range(num_workers*2), return_metadata=True)
+            0.1), range(num_workers*2), return_metadata=True, progress_bar=False)
         worker_names = set([r["worker_name"] for r in results])
         self.assertEqual(len(worker_names), num_workers)
         self.assertEqual(len(self.m.get_worker_info()), num_workers)
@@ -60,7 +59,7 @@ class ManagerTest(unittest.TestCase):
 
         all_worker_names = self.m.get_worker_info().index
         results = self.m.remote_map(lambda x: x, all_worker_names,
-                                    worker_names=all_worker_names, return_metadata=True)
+                                    worker_names=all_worker_names, return_metadata=True, progress_bar=False)
         self.assertEqual(
             [r["result"] for r in results],
             [r["worker_name"] for r in results]
@@ -72,7 +71,7 @@ class ManagerTest(unittest.TestCase):
         _ = start_workers(num_workers)
         time.sleep(0.2)
         results_generator = self.m.remote_map(lambda x: time.sleep(0.1), range(10),
-                                              return_metadata=True, blocking=False)
+                                              return_metadata=True, blocking=False, progress_bar=False)
         self.assertFalse(hasattr(results_generator, "__len__"))
         results = list(results_generator)
         self.assertEqual(len(results), 10)
@@ -89,7 +88,7 @@ class ManagerTest(unittest.TestCase):
         def f(x, y=np.random.random(int(nbytes//8))):
             return x+1
         with self.assertRaises(RuntimeError):
-            self.m.remote_map(f, [None])
+            self.m.remote_map(f, [None], progress_bar=False)
         self.m.stop_all_workers()
 
     @classmethod

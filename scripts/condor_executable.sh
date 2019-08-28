@@ -29,8 +29,7 @@ hostname
 mkdir temp
 cd temp
 mv ../workerenv.tar.xz .
-mv ../worker.py .
-mv ../utils.py .
+mv ../*.py .
 tar xf workerenv.tar.xz
 
 ls -lrth

@@ -14,7 +14,7 @@ from utils import (compress_and_dumps,
                    decompress_and_loads)
 
 class Manager(object):
-    def __init__(self, redis_url=None, qname_results=None, qname_tasks=None, progress_bars=True):
+    def __init__(self, redis_url=None, qname_results=None, qname_tasks=None):
         if not redis_url:
             try:
                 from config import REDIS_URL
@@ -28,7 +28,6 @@ class Manager(object):
         self.qname_results = qname_results if qname_results else self.user+":results"
         self.qname_tasks = qname_tasks if qname_tasks else self.user+":tasks"
         self.remote_results = []
-        self.progress_bars = progress_bars
 
     def __repr__(self):
         def valid(x):
@@ -105,12 +104,8 @@ class Manager(object):
     def get_broker_info(self):
         return self.r.info("all")
 
-    def local_map(self, func, vargs):
-        results = []
-        bar = tqdm(vargs, disable=not self.progress_bars)
-        for args in bar:
-            results.append(func(args))
-        return results
+    def local_map(self, func, vargs, progress_bar=True):
+        return list(map(func, tqdm(vargs, disable=not progress_bar)))
 
     def clear_queues(self):
         self.r.delete(self.qname_results, self.qname_tasks)
@@ -121,11 +116,13 @@ class Manager(object):
     def remote_map(self, func, vargs, return_metadata=True,
                    reuse_chunking=False, worker_names=[],
                    shuffle_chunks=False,
+                   skip_payload_check=False,
                    blocking=True,
+                   progress_bar=True,
                    ):
 
         # If user tries to send more than 2MB (compressed) to each worker, stop them!
-        if len(vargs):
+        if not skip_payload_check and len(vargs):
             compressed_size_mb = len(compress_and_dumps([func, vargs[0]]))/1e6
             if compressed_size_mb > 2:
                 raise RuntimeError(
@@ -157,12 +154,17 @@ class Manager(object):
             results = []
             ntasks = len(vargs)
             # , unit_scale=True,unit="event")
-            bar = tqdm(total=len(vargs), disable=not self.progress_bars)
+            bar = tqdm(total=len(vargs), disable=(not progress_bar or not blocking))
+            npolls = 0
             while len(results) < ntasks:
                 tofetch = self.r.llen(self.qname_results)
                 # avoid spamming pops requests too fast
                 if tofetch == 0:
-                    time.sleep(0.4)
+                    if npolls < 5:
+                        time.sleep(0.005*npolls**2)
+                    else:
+                        time.sleep(0.5)
+                    npolls += 1
                     continue
                 pipe = self.r.pipeline()
                 pipe.lrange(self.qname_results, 0, -1)
