@@ -44,9 +44,16 @@ The redis url for use with `redis.Redis.from_url()` is of the form
 Redis has a docker container, so we can just use that. With Singularity, the
 incantation matching the instructions from the previous section would be
 ```bash
-singularity exec docker://redis redis-server --port 50013 --requirepass mypass --loglevel verbose
+singularity exec docker://redis redis-server --port $((RANDOM%1000+50000)) --requirepass mypass --loglevel verbose
+# or instead of using tcp port, use a unix socket per user
+singularity exec docker://redis redis-server --unixsocket /tmp/redis${USER} --loglevel verbose
 ```
 Once it's running, we can test it from another host with netcat:
 ```bash
-(printf "AUTH mypass\nPING\n";) | nc <hostname> 50013
+# if you included `--requirepass mypass`
+(printf "AUTH mypass\nPING\n";) | nc <hostname> 12345
+# otherwise
+(printf "PING\n";) | nc <hostname> 12345
+# if using a unix socket
+(printf "PING\n";) | nc -U /tmp/redis${USER}
 ```

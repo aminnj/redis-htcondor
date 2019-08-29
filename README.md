@@ -20,7 +20,7 @@ Unfortunately, limitations on what ports are open/how processes communicate
 within and outside the batch system means it would be difficult to use these
 out of the box. So here I have a simple task queue system that allows me to
 have more low-level customization to suit ROOT file analysis (data locality,
-caching, compressed communication).  The jobs are "embarrassingly parallel",
+caching, compressed communication). The jobs are "embarrassingly parallel",
 so there's no real need for complex dynamic logic, direct inter-worker
 communication, DAGs, etc, and this relies on exactly one redis master server
 (one single public-facing ip/port).
@@ -45,15 +45,21 @@ git clone https://github.com/aminnj/redis-htcondor
 cd redis-htcondor
 ```
 
-If someone has not already setup the redis master server, instructions
-to do that are [here](notes/installing_redis.md).
+
+Set up your own redis master server in a GNU screen on an SLC7 computer (e.g., uaf-1) with
+```bash
+singularity exec docker://redis redis-server --port $((RANDOM%1000+50000)) --loglevel verbose
+```
+(More custom installation instructions can be found [here](notes/installing_redis.md)).
 
 While later scripts will accept a redis url to connect to, it's more convenient to specify it once,
 so make a `config.py` file in the current directory containing the following line (appropriately modified
 to point to the already-running server)
 ```
-REDIS_URL = "redis://:mypass@hostname:port"
+REDIS_URL = "redis://hostname:port"
 ```
+
+Once the server is running, the rest can be done on an SLC6 or SLC7 computer.
 
 Initial set up for workers:
 ```bash
@@ -77,6 +83,14 @@ ssh -N -f -L localhost:8895:localhost:8895 uaf-10.t2.ucsd.edu
 
 # open `example.ipynb` and play around.
 ```
+
+## Unit tests
+
+Unit tests can be run with
+```
+scripts/run_tests.sh
+```
+after verifying that `config.py` contains the correct/running redis server url.
 
 ## Example usage
 
