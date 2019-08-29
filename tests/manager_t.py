@@ -25,7 +25,7 @@ class ManagerTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.m = Manager(REDIS_URL
+        cls.m = Manager(REDIS_URL)
 
     def test_local_map(self):
         results = self.m.local_map(lambda x: x, range(5), progress_bar=False)
@@ -36,7 +36,7 @@ class ManagerTest(unittest.TestCase):
         time.sleep(0.2)
         results = self.m.remote_map(lambda x: x, range(5), return_metadata=False, progress_bar=False)
         self.assertEqual(set(results), set(range(5)))
-        self.m.stop_all_workers()
+        self.m.stop_all_workers(progress_bar=False)
 
     def test_few_workers(self):
         num_workers = 8
@@ -49,7 +49,7 @@ class ManagerTest(unittest.TestCase):
         self.assertEqual(len(worker_names), num_workers)
         self.assertEqual(len(self.m.get_worker_info()), num_workers)
 
-        self.m.stop_all_workers()
+        self.m.stop_all_workers(progress_bar=False)
         self.assertEqual(len(self.m.get_worker_info()), 0)
 
     def test_worker_scheduling(self):
@@ -64,7 +64,7 @@ class ManagerTest(unittest.TestCase):
             [r["result"] for r in results],
             [r["worker_name"] for r in results]
         )
-        self.m.stop_all_workers()
+        self.m.stop_all_workers(progress_bar=False)
 
     def test_nonblocking(self):
         num_workers = 4
@@ -75,7 +75,7 @@ class ManagerTest(unittest.TestCase):
         self.assertFalse(hasattr(results_generator, "__len__"))
         results = list(results_generator)
         self.assertEqual(len(results), 10)
-        self.m.stop_all_workers()
+        self.m.stop_all_workers(progress_bar=False)
 
     def test_payload_size_limits(self):
         _ = start_workers(1)
@@ -89,11 +89,11 @@ class ManagerTest(unittest.TestCase):
             return x+1
         with self.assertRaises(RuntimeError):
             self.m.remote_map(f, [None], progress_bar=False)
-        self.m.stop_all_workers()
+        self.m.stop_all_workers(progress_bar=False)
 
     @classmethod
     def tearDownClass(cls):
-        cls.m.stop_all_workers()
+        cls.m.stop_all_workers(progress_bar=False)
 
 
 if __name__ == "__main__":
