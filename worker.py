@@ -100,7 +100,7 @@ class Worker(object):
             # listen to the general queue and also a queue especially for this worker
             key, task_raw = self.r.brpop(
                 [self.user+":tasks", self.worker_name+":tasks"])
-            f, args = decompress_and_loads(task_raw)
+            task_id, f, args = decompress_and_loads(task_raw)
 
             if self.verbose:
                 print("Got another task")
@@ -134,6 +134,7 @@ class Worker(object):
                 write_bytes = 0
 
             meta = dict(
+                task_id=task_id,
                 worker_name=self.worker_name,
                 args=args,
                 tstart=t0,
@@ -142,9 +143,10 @@ class Worker(object):
                 write_bytes=write_bytes,
                 result=res,
             )
+            payload = compress_and_dumps(meta)
 
             # regardless of the incoming queue, push into general results queue
-            self.r.lpush(self.user+":results", compress_and_dumps(meta))
+            self.r.lpush(self.user+":results:"+task_id, payload)
 
             if self.verbose:
                 print("Pushed result to queue")

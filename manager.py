@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import random
+import uuid
 from collections import defaultdict
 
 import cloudpickle
@@ -108,7 +109,7 @@ class Manager(object):
         return list(map(func, tqdm(vargs, disable=not progress_bar)))
 
     def clear_queues(self):
-        self.r.delete(self.qname_results, self.qname_tasks)
+        self.r.delete(self.qname_tasks)
 
     def stop_all_workers(self, **kwargs):
         return self.remote_map(lambda x: x, ["STOP"]*len(self.get_worker_info()), **kwargs)
@@ -136,7 +137,8 @@ class Manager(object):
 
         vargs, worker_names = self.optimize_chunking(
             vargs, worker_names, reuse_chunking=reuse_chunking, shuffle_chunks=shuffle_chunks)
-        vals = [compress_and_dumps([func, args]) for args in vargs]
+        task_id = uuid.uuid4().hex[:16] # 32 bytes to keep it short and simple
+        vals = [compress_and_dumps([task_id, func, args]) for args in vargs]
 
         # If user specified enough worker names to cover all tasks we will submit,
         # then submit them to those workers specifically, otherwise
@@ -149,6 +151,8 @@ class Manager(object):
         else:
             self.r.lpush(self.qname_tasks, *vals)
 
+        qname_results_tid = self.qname_results+":"+task_id
+
         def results_generator(self):
             # Read results from broker
             results = []
@@ -157,7 +161,7 @@ class Manager(object):
             bar = tqdm(total=len(vargs), disable=(not progress_bar or not blocking))
             npolls = 0
             while len(results) < ntasks:
-                tofetch = self.r.llen(self.qname_results)
+                tofetch = self.r.llen(qname_results_tid)
                 # avoid spamming pops requests too fast
                 if tofetch == 0:
                     if npolls < 5:
@@ -167,8 +171,8 @@ class Manager(object):
                     npolls += 1
                     continue
                 pipe = self.r.pipeline()
-                pipe.lrange(self.qname_results, 0, -1)
-                pipe.delete(self.qname_results)
+                pipe.lrange(qname_results_tid, 0, -1)
+                pipe.delete(qname_results_tid)
                 popchunk = pipe.execute()[0]
                 for pc in popchunk[::-1]:
                     if pc is None:
