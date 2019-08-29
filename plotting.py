@@ -6,6 +6,9 @@ import concurrent.futures
 import uproot
 from tqdm.auto import tqdm
 
+def bokeh_output_notebook():
+    from bokeh.io import output_notebook
+    output_notebook()
 
 def plot_timeflow(results, ax=None):
     """
@@ -128,3 +131,44 @@ def plot_cumulative_events(results, ax=None):
         ys.max(), xs.max(), ys.max()/xs.max()))
     ax.legend()
 
+def plot_timeflow_bokeh(results):
+    from bokeh.io import show, output_notebook
+    from bokeh.models import ColumnDataSource
+    from bokeh.plotting import figure
+
+    df = pd.DataFrame(results)[["worker_name","tstart","tstop"]].sort_values(["worker_name","tstart"])
+    df[["tstart","tstop"]] -= df["tstart"].min()
+    df["duration"] = df["tstop"] - df["tstart"]
+    df["worker_num"] = df["worker_name"].astype("category").cat.codes.astype(str)
+
+    if df["tstop"].max() > 10.: mult, unit = 1, "s"
+    else: mult, unit = 1000, "ms"
+        
+    df[["tstart","tstop"]] *= mult
+
+    group = df.groupby("worker_num")
+    source = ColumnDataSource(group)
+
+    wtime = (df["tstop"]-df["tstart"]).sum()
+    ttime = df["tstop"].max()*df["worker_num"].nunique()
+    title = (", ".join([
+        "efficiency (filled/total) = {:.1f}%".format(100.0*wtime/ttime),
+        "median task time = {:.2f}{}".format(group.apply(lambda x:x["tstop"]-x["tstart"]).median(),unit),
+        "median intertask time = {:.2f}{}".format(group.apply(lambda x:x["tstart"].shift(-1)-x["tstop"]).median(),unit),
+        ]))
+
+    p = figure(y_range=group, x_range=[0,df["tstop"].max()], title=title,
+               tooltips = [
+                   ["worker_name","@worker_name"],
+                   ["start","@{tstart}"+unit],
+                   ["stop","@{tstop}"+unit],
+                   ["duration","@{duration}"+unit],
+               ],
+              )
+    p.hbar(y="worker_num", left="tstart", right="tstop", height=1.0, line_color="black", source=df)
+    p.xaxis.axis_label = "elapsed time since start ({})".format(unit)
+    p.yaxis.axis_label = "worker number"
+    p.plot_width = 800
+    p.plot_height = 350
+
+    show(p)
