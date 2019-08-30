@@ -11,17 +11,7 @@ import redis
 import psutil
 
 from utils import (compress_and_dumps, 
-                   decompress_and_loads, 
-                   get_function_kwargs)
-
-ARRAY_CACHE = None
-try:
-    import uproot
-    ARRAY_CACHE = uproot.ArrayCache("8 GB")
-except ImportError as e:
-    print(e, "so we can't make a global ArrayCache")
-except AttributeError as e:
-    print(e, " Maybe this is an older version of uproot without ArrayCache?")
+                   decompress_and_loads)
 
 
 def get_classads():
@@ -36,7 +26,6 @@ def get_classads():
             k, v = line.split("=", 1)
             d[k.strip()] = v.strip().lstrip('"').strip('"')
     return d
-
 
 class Worker(object):
     def __init__(self, redis_url, worker_name=None, verbose=True):
@@ -100,10 +89,10 @@ class Worker(object):
             # listen to the general queue and also a queue especially for this worker
             key, task_raw = self.r.brpop(
                 [self.user+":tasks", self.worker_name+":tasks"])
-            task_id, f, args = decompress_and_loads(task_raw)
+            task_id, job_num, f, args = decompress_and_loads(task_raw)
 
             if self.verbose:
-                print("Got another task")
+                print("Received task_id={}, job_num={}".format(task_id,job_num))
 
             try:
                 ioc = p.io_counters()
@@ -115,12 +104,8 @@ class Worker(object):
 
             t0 = time.time()
             try:
-                # check for `f(..., cache=None)` and fill cache kwarg
-                kwargs = get_function_kwargs(f)
-                if kwargs.get("cache", "") is None:
-                    res = f(args, cache=ARRAY_CACHE)
-                else:
-                    res = f(args)
+                f.__globals__["get_worker"] = lambda: self
+                res = f(args)
             except Exception as e:
                 res = traceback.format_exc()
             t1 = time.time()
@@ -135,6 +120,7 @@ class Worker(object):
 
             meta = dict(
                 task_id=task_id,
+                job_num=job_num,
                 worker_name=self.worker_name,
                 args=args,
                 tstart=t0,
@@ -146,10 +132,11 @@ class Worker(object):
             payload = compress_and_dumps(meta)
 
             # regardless of the incoming queue, push into general results queue
-            self.r.lpush(self.user+":results:"+task_id, payload)
+            qname = self.user+":results:"+task_id
+            self.r.lpush(qname, payload)
 
             if self.verbose:
-                print("Pushed result to queue")
+                print("Pushed task_id={}, job_num={} to queue {}".format(task_id, job_num, qname))
 
             # if we got the poison pill, stop after lpush for at least some acknowledgment
             if args == "STOP":
@@ -172,5 +159,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     w = Worker(args.url)
+
+    w.cache = None
+    try:
+        import uproot
+        ARRAY_CACHE = uproot.ArrayCache("8 GB")
+        w.cache = ARRAY_CACHE
+    except ImportError as e:
+        print(e, "so we can't make a global ArrayCache")
+    except AttributeError as e:
+        print(e, " Maybe this is an older version of uproot without ArrayCache?")
 
     w.run()
