@@ -3,7 +3,7 @@ cat << EOF | singularity shell --bind /hadoop /cvmfs/singularity.opensciencegrid
 
 source myenv/bin/activate
 export PYTHONPATH=.:$PYTHONPATH
-python tests/manager_t.py $@
+$@
 
 EOF
 

@@ -91,6 +91,11 @@ Unit tests can be run with
 scripts/run_tests.sh
 ```
 after verifying that `config.py` contains the correct/running redis server url.
+Arguments are passed to python call, which uses the unittest module, 
+so you can run a single test with
+```
+scripts/run_tests.sh ManagerTest.test_local_map
+```
 
 ## Example usage
 
