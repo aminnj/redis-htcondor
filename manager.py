@@ -133,12 +133,14 @@ class Manager(object):
                 )
 
         # Remove leftover/errored tasks
-        self.clear_queues()
+        # FIXME, want to clean up, but this clobbers multiple non-blocking maps!
+        # actually do we need to clean up?
+        # self.clear_queues()
 
         vargs, worker_names = self.optimize_chunking(
             vargs, worker_names, reuse_chunking=reuse_chunking, shuffle_chunks=shuffle_chunks)
         task_id = uuid.uuid4().hex[:16] # 32 bytes to keep it short and simple
-        vals = [compress_and_dumps([task_id, func, args]) for args in vargs]
+        vals = [compress_and_dumps([task_id, job_num, func, args]) for job_num,args in enumerate(vargs)]
 
         # If user specified enough worker names to cover all tasks we will submit,
         # then submit them to those workers specifically, otherwise
@@ -157,7 +159,6 @@ class Manager(object):
             # Read results from broker
             results = []
             ntasks = len(vargs)
-            # , unit_scale=True,unit="event")
             bar = tqdm(total=len(vargs), disable=(not progress_bar or not blocking))
             npolls = 0
             while len(results) < ntasks:
@@ -184,21 +185,30 @@ class Manager(object):
                     yield res
                     bar.update(1)
             bar.close()
-            self.remote_results = results
+            self.maybe_retain_results(results, reuse_chunking)
 
         if blocking:
             return list(results_generator(self))
         else:
             return results_generator(self)
 
+    def maybe_retain_results(self, results, reuse_chunking):
+        if not reuse_chunking: return
+        if not len(results): return
+        if not (type(results[0]) == dict): return
+        remote_results = []
+        for result in results:
+            remote_results.append(dict(worker_name=result["worker_name"],args=result["args"]))
+        self.remote_results = remote_results
+
     def optimize_chunking(self, vargs, worker_names, reuse_chunking=False, shuffle_chunks=False):
         # If the previous chunking matches the current chunking, then
         # use the old chunks and corresponding worker names to make use of
         # cached branches
-        if reuse_chunking and self.remote_results and (type(self.remote_results[0]) == dict):
+        if reuse_chunking and self.remote_results:
             old_vargs = [r["args"] for r in self.remote_results]
             old_worker_names = [r["worker_name"] for r in self.remote_results]
-            if (type(vargs[0]) in [tuple, list]) and (sorted(map(tuple, vargs)) == sorted(map(tuple, old_vargs))):
+            if sorted(vargs) == sorted(old_vargs):
                 vargs = old_vargs
                 worker_names = old_worker_names
                 print("Current chunking matches old chunking, so we will re-use the old worker ordering "
