@@ -33,6 +33,13 @@ if __name__ == "__main__":
             "(if not specified, attempts to use the result of `from config import REDIS_URL`)", default="")
     parser.add_argument("-d", "--dry_run", help="echo submit file, but don't submit", action="store_true")
     parser.add_argument("-n", "--num_workers", help="number of workers", default=1, type=int)
+    parser.add_argument("-b", "--blacklisted_machines", help="blacklisted machines", default=[
+            "sdsc-49.t2.ucsd.edu",
+            "sdsc-50.t2.ucsd.edu",
+            "cabinet-7-7-36.t2.ucsd.edu",
+            "cabinet-8-8-1.t2.ucsd.edu",
+    ], action="append")
+    parser.add_argument("-w", "--whitelisted_machines", help="whitelisted machines", default=[], action="append")
     args = parser.parse_args()
 
     redis_url = args.redis_url
@@ -45,18 +52,10 @@ if __name__ == "__main__":
 
 
     extra_requirements = "True"
-    blacklisted_machines = [
-            "sdsc-49.t2.ucsd.edu",
-            "sdsc-50.t2.ucsd.edu",
-            "cabinet-7-7-36.t2.ucsd.edu",
-            "cabinet-8-8-1.t2.ucsd.edu",
-            ]
-    if blacklisted_machines:
-        extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
-    whitelisted_machines = [
-            ]
-    if whitelisted_machines:
-        extra_requirements = " || ".join(map(lambda x: '(TARGET.Machine == "{0}")'.format(x),whitelisted_machines))
+    if args.blacklisted_machines:
+        extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),args.blacklisted_machines))
+    if args.whitelisted_machines:
+        extra_requirements = " || ".join(map(lambda x: '(TARGET.Machine == "{0}")'.format(x),args.whitelisted_machines))
 
     content = template.format(
             extra_requirements=extra_requirements,
