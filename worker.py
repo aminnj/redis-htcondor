@@ -52,7 +52,7 @@ class Worker(object):
         self.r.client_setname(self.worker_name)
 
         self.worker_meta = dict(
-            worker_name=worker_name,
+            worker_name=self.worker_name,
             total_tasks=0,
             total_read_bytes=0,
             total_write_bytes=0,
