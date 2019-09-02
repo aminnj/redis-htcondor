@@ -8,7 +8,7 @@ pip3 install redis cloudpickle lz4 uproot psutil diskcache blosc
 export LC_ALL=C.UTF-8
 export PYTHONPATH=$(pwd):$PYTHONPATH
 echo "Making workerenv.tar.xz"
-tar czf workerenv.tar.xz workerenv/
+tar --exclude='__pycache__' -cJf workerenv.tar.xz workerenv/
 echo "Done"
 
 EOF
