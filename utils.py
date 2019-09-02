@@ -11,23 +11,15 @@ def compress_and_dumps(obj):
 def decompress_and_loads(obj):
     return cloudpickle.loads(lz4.frame.decompress(obj))
 
-def get_function_kwargs(func):
-    # https://stackoverflow.com/questions/2088056/get-kwargs-inside-function
-    spec = inspect.getfullargspec(func)
-    if spec.defaults:
-        return dict(zip(spec.args[::-1], spec.defaults[::-1]))
-    elif spec.kwonlyargs:
-        return spec.kwonlydefaults
-    else:
-        return {}
+def run_one_worker(args):
+    import worker
+    from config import REDIS_URL
+    w = worker.Worker(REDIS_URL, verbose=False).run()
 
-# def get_redis_url():
-#     try:
-#         from config import REDIS_URL
-#         return REDIS_URL
-#     except ImportError as e:
-#         raise Exception("You didn't specify a redis url, and I couldn't find one in config.REDIS_URL")
-#     return None
+def start_local_workers(n):
+    executor = concurrent.futures.ProcessPoolExecutor(n)
+    worker_futures = [executor.submit(run_one_worker, i) for i in range(n)]
+    return executor, worker_futures
 
 
 @functools.lru_cache(maxsize=256)
