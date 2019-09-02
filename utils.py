@@ -14,7 +14,9 @@ def decompress_and_loads(obj):
 def run_one_worker(args):
     import worker
     from config import REDIS_URL
-    w = worker.Worker(REDIS_URL, verbose=False).run()
+    w = worker.Worker(REDIS_URL, verbose=False)
+    w.start_pubsub()
+    w.run()
 
 def start_local_workers(n):
     executor = concurrent.futures.ProcessPoolExecutor(n)

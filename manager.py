@@ -38,7 +38,7 @@ class Manager(object):
                 sum(map(valid,self.r.client_list())),
                 )
 
-    def get_worker_info(self, include_stats=False, stat_integration_time=2.0):
+    def get_worker_info(self, include_stats=False, min_delay=0.3):
         def valid(x):
             return (x["flags"]!="N") and (x["name"].startswith(self.user))
         df = pd.DataFrame([c for c in self.r.client_list() if valid(c)])
@@ -47,57 +47,54 @@ class Manager(object):
         if not include_stats:
             return df.set_index("name")
 
-        def f(meta):
+        def get_stats(*args):
             import psutil
             p = psutil.Process()
             t1 = time.time()
+            cpu_worker = p.cpu_times()
+            cpu_node = psutil.cpu_times()
             net1 = psutil.net_io_counters()
             disk1 = psutil.disk_io_counters()
-            time.sleep(stat_integration_time)
-            t2 = time.time()
-            net2 = psutil.net_io_counters()
-            disk2 = psutil.disk_io_counters()
+            meta = get_worker().worker_meta
             return dict(
-                meta=meta,
-                t1=t1, t2=t2,
-                net1=net1, net2=net2,
-                disk1=disk1, disk2=disk2,
-                mem_used=p.memory_info()[0],
-            )
-        self.r.publish(self.user+":channel1", compress_and_dumps(f))
-        # wait 1 more second than the process should've slept and fetch results in one shot
-        time.sleep(stat_integration_time+1.)
-        pipe = self.r.pipeline()
-        pipe.lrange(self.user+":channel1results", 0, -1)
-        pipe.delete(self.user+":channel1results")
-        results = pipe.execute()[0]
+                name=meta["worker_name"],
+                worker_busy = meta["busy"],
+                worker_tasks = meta["total_tasks"],
+                worker_read_bytes = meta["total_read_bytes"],
+                worker_write_bytes = meta["total_write_bytes"],
+                worker_time_elapsed = meta["total_time_elapsed"],
+                worker_cpu_time = cpu_worker.user + cpu_worker.system,
+                node_t=t1,
+                worker_mem_used=p.memory_info()[0],
+                node_read_bytes = disk1.read_bytes,
+                node_write_bytes = disk1.write_bytes,
+                node_recv_bytes = net1.bytes_recv,
+                node_sent_bytes = net1.bytes_sent,
+                node_cpu_time = cpu_node.user + cpu_node.nice + cpu_node.system + cpu_node.iowait,
+                node_iowait_time = cpu_node.iowait,
+               )
 
-        def f(x):
-            d = decompress_and_loads(x)
-            ret = {}
-            try:
-                ret["name"] = d["meta"]["worker_name"]
-                ret["worker_time_elapsed"] = d["meta"]["total_time_elapsed"]
-                ret["worker_write_bytes"] = d["meta"]["total_write_bytes"]
-                ret["worker_read_bytes"] = d["meta"]["total_read_bytes"]
-                ret["worker_tasks"] = d["meta"]["total_tasks"]
-                ret["worker_mem_used"] = d["mem_used"]
-                ret["node_dt"] = d["t2"]-d["t1"]
-                ret["node_read_bytes"] = d["disk2"].read_bytes - \
-                    d["disk1"].read_bytes
-                ret["node_write_bytes"] = d["disk2"].write_bytes - \
-                    d["disk1"].write_bytes
-                ret["node_recv_bytes"] = d["net2"].bytes_recv - \
-                    d["net1"].bytes_recv
-                ret["node_sent_bytes"] = d["net2"].bytes_sent - \
-                    d["net1"].bytes_sent
-            except:
-                pass
-            return ret
+        qname_in = self.user+":pubsubin"
+        qname_out = self.user+":pubsubout"
+        pipe = self.r.pipeline()
+        pipe.delete(qname_in,qname_out)
+        pipe.publish(qname_in, compress_and_dumps(get_stats))
+        pipe.execute()
+        query_time = time.time()
+        time.sleep(min_delay)
+
+        pipe = self.r.pipeline()
+        pipe.lrange(qname_out,0,-1)
+        pipe.delete(qname_out)
+        results = [decompress_and_loads(r) for r in pipe.execute()[0]]
         df["node"] = df["name"].str.split("__").str[1]
-        df = df.merge(pd.DataFrame(map(f, results)),
-                      on="name", how="outer").set_index("name")
-        failed = df["node_dt"].isna().sum()
+        df["query_t"] = query_time
+        dfextra = pd.DataFrame(results)
+        if not dfextra.empty:
+            df = df.merge(dfextra, on="name", how="outer").set_index("name")
+            failed = df["node_t"].isna().sum()
+        else:
+            failed = len(df)
         if failed > 0:
             print("Did not hear back from {} workers in time".format(failed))
         return df
@@ -112,7 +109,10 @@ class Manager(object):
         self.r.delete(self.qname_tasks)
 
     def stop_all_workers(self, **kwargs):
-        return self.remote_map(lambda x: x, ["STOP"]*len(self.get_worker_info()), **kwargs)
+        # kill pubsub threads first
+        self.r.client_kill_filter(_type="pubsub")
+        self.r.client_kill_filter(_type="normal")
+        # self.remote_map(lambda x: x, ["STOP"]*len(self.get_worker_info()), **kwargs)
 
     def remote_map(self, func, vargs, return_metadata=True,
                    reuse_chunking=False, worker_names=[],
@@ -168,7 +168,7 @@ class Manager(object):
                     if npolls < 5:
                         time.sleep(0.005*npolls**2)
                     else:
-                        time.sleep(0.5)
+                        time.sleep(0.20)
                     npolls += 1
                     continue
                 pipe = self.r.pipeline()

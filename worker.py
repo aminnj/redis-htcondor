@@ -67,28 +67,37 @@ class Worker(object):
 
     def start_pubsub(self):
         # Non-blocking background pubsub thread
-        pubsub = self.r.pubsub(ignore_subscribe_messages=True)
+        self.pubsub = self.r.pubsub(ignore_subscribe_messages=True)
 
         def handler(x):
             if x["type"] != "message":
                 return
             f = decompress_and_loads(x["data"])
             try:
-                res = f(self.worker_meta)
+                f.__globals__["get_worker"] = lambda: self
+                res = f()
             except:
                 res = traceback.format_exc()
-            self.r.lpush(self.user+":channel1results", compress_and_dumps(res))
-        pubsub.subscribe(**{self.user+":channel1": handler})
-        self.pubsub_thread = pubsub.run_in_thread(sleep_time=0.1, daemon=True)
-        return self.pubsub_thread
+            self.r.lpush(self.user+":pubsubout", compress_and_dumps(res))
+        self.pubsub.subscribe(**{self.user+":pubsubin": handler})
+        self.pubsub_thread = self.pubsub.run_in_thread(sleep_time=0.1, daemon=True)
+        return self.pubsub
+
 
     def run(self):
         # Blocking
         p = psutil.Process()
         while True:
             # listen to the general queue and also a queue especially for this worker
-            key, task_raw = self.r.brpop(
-                [self.user+":tasks", self.worker_name+":tasks"])
+            try:
+                key, task_raw = self.r.brpop(
+                    [self.user+":tasks", self.worker_name+":tasks"])
+            except ConnectionError as e:
+                print("Connection error, exiting quietly.")
+                break
+
+            self.worker_meta["busy"] = True
+
             task_id, job_num, f, args = decompress_and_loads(task_raw)
 
             if self.verbose:
@@ -149,6 +158,8 @@ class Worker(object):
             self.worker_meta["total_write_bytes"] += write_bytes
             self.worker_meta["total_tasks"] += 1
             self.worker_meta["total_time_elapsed"] += t1-t0
+
+            self.worker_meta["busy"] = False
 
 
 if __name__ == "__main__":
