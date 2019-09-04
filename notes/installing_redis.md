@@ -20,6 +20,12 @@ echo "loglevel verbose" >> myconf.conf
 
 ```
 
+More succinctly:
+```
+( curl http://download.redis.io/releases/redis-stable.tar.gz | tar -xz ) ; cd redis-stable/ ; make -j8 ; src/redis-server --port 50124
+```
+Note that compiling from source will work on SLC6 or SLC7 without CMSSW.
+
 In cases where redis is not bound to a public-facing port, you may have to use `ngrok`
 to bind your local port (50013) in this case to something ngrok will give you.
 (note that the free `ngrok` shouldn't/can't be used with more than 4 connections, so use it for testing only)

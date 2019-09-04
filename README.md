@@ -51,7 +51,8 @@ Set up your own redis master server in a GNU screen on an SLC7 computer (e.g., u
 singularity exec docker://redis redis-server --port $((RANDOM%1000+50000)) --loglevel verbose
 ```
 Make note of the port that got used based on the output of that command.
-(More custom installation instructions can be found [here](notes/installing_redis.md)).
+(More custom installation instructions, including installing from source on SLC6, 
+can be found [here](notes/installing_redis.md)).
 
 While later scripts will accept a redis url to connect to, it's more convenient to specify it once,
 so make a `config.py` file in the current directory containing the following line (appropriately modified
