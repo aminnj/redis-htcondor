@@ -181,4 +181,5 @@ if __name__ == "__main__":
     except AttributeError as e:
         print(e, " Maybe this is an older version of uproot without ArrayCache?")
 
+    w.start_pubsub()
     w.run()
