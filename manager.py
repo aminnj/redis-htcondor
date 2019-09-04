@@ -91,7 +91,7 @@ class Manager(object):
         df["query_t"] = query_time
         dfextra = pd.DataFrame(results)
         if not dfextra.empty:
-            df = df.merge(dfextra, on="name", how="outer").set_index("name")
+            df = df.merge(dfextra, on="name", how="left").set_index("name")
             failed = df["node_t"].isna().sum()
         else:
             failed = len(df)
