@@ -76,8 +76,6 @@ scripts/submit_workers.py --num_workers 2
 
 Launch jupyter notebook for analysis:
 ```bash
-# Before executing, edit the port in this file to avoid clashes with other users
-# who also are running jupyter notebooks on the same machine
 scripts/start_analysis_server.sh
 
 # visit the url printed out at the end and make sure to forward the port to your laptop first. e.g.,

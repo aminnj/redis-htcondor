@@ -78,3 +78,10 @@ print(results)
 
 * Start workers in condor jobs with `ray start --redis-address SCHEDULERADDRESS --num-cpus 1 --num-gpus 0 --block`
 
+
+### Rabbitmq instead of redis
+
+Tried to use `singularity shell docker://rabbitmq` based on the docker [page](https://hub.docker.com/_/rabbitmq),
+but I can't run `rabbitmq-server` because I don't have permission to write in a directory. Chowning it fails, and `singularity shell -w`
+doesn't help. Must be some singularity-docker shenanigans. I don't have root, sigh.
+

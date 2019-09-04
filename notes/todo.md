@@ -13,3 +13,4 @@ they are called non-blocking)
 - [ ] `requirements.txt` or pip-able
 - [x] redis url (and maybe other things) in a `config.py` file
 - [x] Instead of `return_metadata` returning a list of pairs (result,metadata dict), just have it return a dict where the result is a key in the metadata dict, and no need for pairs
+- [ ] for small dicts (mainly metadata), is it worth to just use a fast json serializer (maybe even with lz4) instead of cloudpickle?
