@@ -3,7 +3,7 @@
 ### Motivation
 
 The specific goal of this repository is to analyze CMS NanoAOD ROOT files with [uproot](https://github.com/scikit-hep/uproot)
-in a similar style to [coffea](https://github.com/CoffeaTeam/coffea), but using a master/manager
+eventually using analysis tools from [coffea](https://github.com/CoffeaTeam/coffea), but using a master/manager
 that sends computing tasks to workers running in an HTCondor batch system.
 
 There are a handful of tools designed to do this more generally (dynamic task execution with brokered communication):
